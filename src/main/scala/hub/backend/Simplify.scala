@@ -1,6 +1,6 @@
 package hub.backend
 
-import hub.{Asg, Noop, Par, Seq, Update}
+import hub._
 
 /**
   * Created by guille on 18/12/2018.
@@ -30,5 +30,31 @@ object Simplify {
 //      case Group(u3) => u3
 //      case u3 => Group(u3)
 //    }
+  }
+
+
+  def apply(g:Guard):Guard = g match {
+    case Ltrue => Ltrue
+    case LOr(g1, g2) => (apply(g1),apply(g2)) match {
+      case (Ltrue,g) => g
+      case (g,Ltrue) => g
+      case (LNot(Ltrue), g) => g
+      case (g, LNot(Ltrue)) => g
+      case (LNot(g3), g4) => if (g3 == g4) Ltrue else LOr(LNot(g3), g4)
+      case (e3, LNot(e4)) => if (e3 == e4) Ltrue else LOr(e3, LNot(e4))
+      case (e3, e4) => if (e3 == e4) e3 else LOr(e3, e4)
+    }
+    case LAnd(g1, g2) => (apply(g1), apply(g2)) match {
+      case (Ltrue, g) => g
+      case (g, Ltrue) => g
+      case (LNot(Ltrue), _) => LNot(Ltrue)
+      case (_, LNot(Ltrue)) => LNot(Ltrue)
+      case (LNot(g3), g4) => if (g3 == g4) LNot(Ltrue) else LAnd(LNot(g3), g4)
+      case (g3, LNot(e4)) => if (g3 == e4) LNot(Ltrue) else LAnd(g3, LNot(e4))
+      case (g3, g4) => if (g3 == g4) g3 else LAnd(g3, g4)
+    }
+    case LNot(LNot(g1)) => apply(g1)
+    case LNot(g1) => LNot(apply(g1))
+    case Pred(_,_) => g
   }
 }
