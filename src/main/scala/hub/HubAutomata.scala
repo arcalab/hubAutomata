@@ -35,18 +35,18 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     for ((from, (to, fire, g, upd, es)) <- trans)
       yield (
         from
-        , s"${Show(Simplify(g))};"+es.map(getName(_,fire))
+        , s"${Show(Simplify(g))},"+es.map(getName(_,fire))
         .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
-        .mkString(".")+s";${Show(Simplify(upd))}"
+        .mkString(".")+s",${Show(Simplify(upd))}"
         , (fire,es).hashCode().toString
         , to)
 
   /* Return the set of input ports */
-  def getInputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten
+  def getInputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten intersect ports
 
   /* Return the set of output ports */
-  def getOutputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.outs)).flatten
+  def getOutputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.outs)).flatten intersect ports
 
   /* Return the set of internal variable names */
   def getInternalVarsNames: Set[String] =
@@ -55,6 +55,20 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
 
   /* Return the set of all variables */
   def getVars:Set[Var] = (for((_,(_,_,g,u,_)) <- trans) yield g.vars ++ u.vars).flatten
+
+  def getInternalVars:Set[Var] = {
+    var globalVars: Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
+    (for ((_, (_, _, g, u, _)) <- trans) yield g.vars ++ u.vars).flatten.filterNot(v => globalVars.contains(v.name))
+  }
+
+  // number of states, a list of (varTypeName, sizeOfvarTypeName in number of bytes)
+  //  Memory = (Int,List[(String,Int)])
+  //todo: proper memory class pehaps when vars are of different types.
+  def memory:(Int,List[(String,Int)]) = {
+    val stSize = getStates.size
+    val varSize = getInternalVars.toList.map(v => (v.value.getClass.toString, 32))//(32 bit integers) for now all variables are of type int
+    (stSize,varSize)
+  }
 
   private def getName2(edge: Edge,fire:Set[Int]):String =
     s"${edge.prim}-${edge.parents.mkString("/")}-${fire.mkString(":")}"
@@ -128,12 +142,12 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     */
   def simplify: HubAutomata = {
     // all variables produced in transitions of the hub
-    val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.vars)
+    val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
     // all variables dependencies in transitions of the hub
-    var allDep: Set[Var] = this.trans.flatMap(t => t._2._4.vars ++ t._2._3.vars)
+    var allDep: Set[Var] = this.trans.flatMap(t => t._2._4.dep ++ t._2._3.vars)
 
-    var interfaceVarNames:Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
-    var internalVars:Set[Var] = this.getVars.filterNot(v => interfaceVarNames contains v.name)
+//    var interfaceVarNames:Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
+    var internalVars:Set[Var] = this.getInternalVars //this.getVars.filterNot(v => interfaceVarNames contains v.name)
     var unusedVars:Set[Var] = internalVars -- allProd.intersect(allDep)
 
     if (unusedVars.isEmpty)
@@ -161,6 +175,14 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       case Asg(x,e) => if (unused.contains(x)) Noop else Asg(x,e)
       case Par(u1,u2) => Par(rmUnusedUpd(u1,unused),rmUnusedUpd(u2,unused))
       case Seq(u1,u2) => Seq(rmUnusedUpd(u1,unused),rmUnusedUpd(u2,unused))
+  }
+
+  def serialize: HubAutomata = {
+    var ntrans:Trans = Set()
+    for ((from,(to,p,g,u,es)) <- trans)
+      ntrans += ((from,(to,p,g,u.instance,es)))
+
+    HubAutomata(ports,init,ntrans)
   }
 
   /** List transitions in a pretty-print. */
@@ -354,7 +376,7 @@ object HubAutomata {
       }
 
       // hide internal actions if desired
-      def mkFire(fire: Set[Int]): Set[Int] = if (hide) fire -- shared else fire
+      def mkPorts(fire: Set[Int]): Set[Int] = if (hide) fire -- shared else fire
 
       // just 1
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
@@ -368,10 +390,10 @@ object HubAutomata {
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; (from2, (to2, fire2, g2, u2, es2)) <- a2.trans) {
         if (ok2(fire1, fire2))
           restrans += mkState(from1, from2) ->
-            (mkState(to1, to2), mkFire(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
+            (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
       }
       // println(s"ports: $newStates")
-      val res1 = HubAutomata(a1.ports ++ a2.ports, mkState(a1.init, a2.init), restrans)
+      val res1 = HubAutomata(mkPorts(a1.ports ++ a2.ports), mkState(a1.init, a2.init), restrans)
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
       //    println(s"cleaned ${a2.show}")
