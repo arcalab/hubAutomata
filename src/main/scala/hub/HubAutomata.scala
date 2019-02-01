@@ -59,35 +59,43 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   private def getName2(edge: Edge,fire:Set[Int]):String =
     s"${edge.prim}-${edge.parents.mkString("/")}-${fire.mkString(":")}"
 
-  private def getName(edge: Edge,fire:Set[Int]):String = (edge.parents match {
-    case Nil     => edge.prim.name
-    case ""::_   => edge.prim.name
-    case head::_ => head
-  }) + getDir(edge,fire) //+
+  private def getName(edge: Edge,fire:Set[Int]):String =
+    if (fire.intersect((edge.ins ++ edge.outs).toSet).nonEmpty) {
+      (edge.parents match {
+        case Nil     => edge.prim.name
+        case ""::_   => edge.prim.name
+        case head::_ => head
+      }) + getDir(edge,fire)
+    } else ""  //+
   //  s"[${edge.ins.toSet.intersect(fire).mkString("|")}->${edge.outs.toSet.intersect(fire).mkString("|")}]"
   //  fire.mkString("|")
   private def getDir(edge: Edge,fire:Set[Int]): String = {
-    val src = (edge.ins.toSet intersect fire).nonEmpty
-    val snk = (edge.outs.toSet intersect fire).nonEmpty
-    (src,snk) match {
-      case (true,false) => "↓"
-      case (false,true) => "↑"
-      case _ => "↕"
+      val src = (edge.ins.toSet intersect fire).nonEmpty
+      val snk = (edge.outs.toSet intersect fire).nonEmpty
+      (src, snk) match {
+        case (true, false) => "↓"
+        case (false, true) => "↑"
+        case (true,true) => "↕"
+        case _ => ""
+      }
     }
-  }
+
 //  private def primName(prim: CPrim): String = (prim.name,prim.extra) match {
 //    case ("writer",Some(s:String)) => s"wr($s)"
 //    case ("reader",Some(s:String)) => s"rd($s)"
 //    case (n,Some(s:String)) => s"$n($s)"
 //    case (n,_) => n
 //  }
-  private def cleanDir(s:String,rest:Set[String]): Set[String] = (s.init,s.last) match {
-    case (name,'↓') if rest.contains(name + '↑') || rest.contains(name + '↕') =>
-      rest - (name+'↓') - (name+'↑') + (name+'↕')
-    case (name,'↑') if rest.contains(name + '↓') || rest.contains(name + '↕') =>
-      rest - (name+'↓') - (name+'↑') + (name+'↕')
-    case _ => rest + s
-  }
+  private def cleanDir(s:String,rest:Set[String]): Set[String] =
+  if (s.nonEmpty) {
+    (s.init, s.last) match {
+      case (name, '↓') if rest.contains(name + '↑') || rest.contains(name + '↕') =>
+        rest - (name + '↓') - (name + '↑') + (name + '↕')
+      case (name, '↑') if rest.contains(name + '↓') || rest.contains(name + '↕') =>
+        rest - (name + '↓') - (name + '↑') + (name + '↕')
+      case _ => rest + s
+    }
+  } else rest
 
   private def printPrim(edge: Edge):String = {
     s"""${edge.prim}-${edge.ins.mkString(".")}-${edge.outs.mkString(".")}"""
