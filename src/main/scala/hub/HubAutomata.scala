@@ -241,7 +241,7 @@ object HubAutomata {
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
 
       case Edge(p, _, _, _) =>
-        throw new RuntimeException(s"Unknown port automata for primitive $p")
+        throw new RuntimeException(s"Unknown hub automata for primitive $p")
 
     }
 
@@ -293,51 +293,51 @@ object HubAutomata {
       // rename internal vars if necessary
       // external variables not necesary because they have the same name (corresponding to the rename after syncronization)
       var sharedVars = a1.getInternalVarsNames.intersect(a2.getInternalVarsNames)
-      var newVars = Map[String, String]()
+      var newVars = Map[(String,Int), String]()
       var varSeed = 0
 
-      //TODO: fix renaming
-      def mkVar(v: String): String = {
+
+      def mkVar(v: String,aut:Int): String = {
         if (sharedVars contains v)
-          if (newVars.contains(v))
-            newVars(v)
+          if (newVars.contains((v,aut)))
+            newVars((v,aut))
           else {
             varSeed += 1
-            newVars += (v -> s"$v$varSeed")
+            newVars += ((v,aut) -> s"$v$varSeed")
             v + s"$varSeed"
           }
         else v
       }
 
-      def mkGuard(g: Guard): Guard =
+      def mkGuard(g: Guard,aut:Int): Guard =
         if (g.vars.map(_.name).intersect(sharedVars).isEmpty) g
-        else remapGuard(g)
+        else remapGuard(g,aut)
 
       def shareVars(v: Set[Var]): Boolean = v.map(_.name).intersect(sharedVars).nonEmpty
 
-      def remapGuard(g: Guard): Guard = g match {
+      def remapGuard(g: Guard,aut:Int): Guard = g match {
         case Ltrue => Ltrue
-        case LNot(g1) => LNot(remapGuard(g))
-        case Pred(n, param) => Pred(n, remapParam(param))
-        case LOr(g1, g2) => LOr(remapGuard(g1), remapGuard(g2))
-        case LAnd(g1, g2) => LAnd(remapGuard(g1), remapGuard(g2))
+        case LNot(g1) => LNot(remapGuard(g,aut))
+        case Pred(n, param) => Pred(n, remapParam(param,aut))
+        case LOr(g1, g2) => LOr(remapGuard(g1,aut), remapGuard(g2,aut))
+        case LAnd(g1, g2) => LAnd(remapGuard(g1,aut), remapGuard(g2,aut))
       }
 
-      def remapUpd(u: Update): Update = u match {
+      def remapUpd(u: Update,aut:Int): Update = u match {
         case Noop => Noop
-        case Asg(x, e) => Asg(Var(mkVar(x.name)), remapExpr(e))
-        case Par(u1, u2) => Par(remapUpd(u1), remapUpd(u2))
-        case Seq(u1, u2) => Seq(remapUpd(u1), remapUpd(u2))
+        case Asg(x, e) => Asg(Var(mkVar(x.name,aut)), remapExpr(e,aut))
+        case Par(u1, u2) => Par(remapUpd(u1,aut), remapUpd(u2,aut))
+        case Seq(u1, u2) => Seq(remapUpd(u1,aut), remapUpd(u2,aut))
       }
 
-      def remapParam(param: List[Expr]): List[Expr] = {
-        param.map(remapExpr(_))
+      def remapParam(param: List[Expr],aut:Int): List[Expr] = {
+        param.map(remapExpr(_,aut))
       }
 
-      def remapExpr(e: Expr): Expr = e match {
-        case Var(n, v) => Var(mkVar(n), v)
+      def remapExpr(e: Expr,aut:Int): Expr = e match {
+        case Var(n, v) => Var(mkVar(n,aut), v)
         case n@Val(v) => n
-        case Fun(n, args) => Fun(n, remapParam(args))
+        case Fun(n, args) => Fun(n, remapParam(args,aut))
       }
 
       // hide internal actions if desired
@@ -346,15 +346,16 @@ object HubAutomata {
       // just 1
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
         if (ok(fire1))
-          restrans += mkState(from1, p2) -> (mkState(to1, p2), fire1, remapGuard(g1), remapUpd(u1), es1)
+          restrans += mkState(from1, p2) -> (mkState(to1, p2), fire1, remapGuard(g1,1), remapUpd(u1,1), es1)
       // just 2
       for ((from2, (to2, fire2, g2, u2, es2)) <- a2.trans; p1 <- a1.getStates)
         if (ok(fire2))
-          restrans += mkState(p1, from2) -> (mkState(p1, to2), fire2, remapGuard(g2), remapUpd(u2), es2)
+          restrans += mkState(p1, from2) -> (mkState(p1, to2), fire2, remapGuard(g2,2), remapUpd(u2,2), es2)
       // communication
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; (from2, (to2, fire2, g2, u2, es2)) <- a2.trans) {
         if (ok2(fire1, fire2))
-          restrans += mkState(from1, from2) -> (mkState(to1, to2), mkFire(fire1 ++ fire2), remapGuard(g1 && g2), remapUpd(u1 | u2), es1 ++ es2)
+          restrans += mkState(from1, from2) ->
+            (mkState(to1, to2), mkFire(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
       }
       // println(s"ports: $newStates")
       val res1 = HubAutomata(a1.ports ++ a2.ports, mkState(a1.init, a2.init), restrans)
