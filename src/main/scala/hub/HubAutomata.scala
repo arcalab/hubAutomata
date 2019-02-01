@@ -207,7 +207,7 @@ object HubAutomata {
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
-          , seed + 1)
+          , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
       case Edge(CPrim("drain",_,_,_), List(a, b), List(), _) =>
@@ -218,6 +218,11 @@ object HubAutomata {
             seed -> (seed, Set(b, c), Ltrue, c.toString := b.toString, Set(e))))
           , seed + 1)
       case Edge(CPrim("dupl",_,_,_), List(a), List(b, c), _) =>
+        (HubAutomata(Set(a, b, c), seed
+          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
+          , seed + 1)
+      // if we use onetooneSimple we need to add support for nodes
+      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
