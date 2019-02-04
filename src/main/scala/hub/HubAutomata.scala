@@ -63,7 +63,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
 
   // number of states, a list of (varTypeName, sizeOfvarTypeName in number of bytes)
   //  Memory = (Int,List[(String,Int)])
-  //todo: proper memory class pehaps when vars are of different types.
+  //todo: proper memory class perhaps when vars are of different types.
   def memory:(Int,List[(String,Int)]) = {
     val stSize = getStates.size
     val varSize = getInternalVars.toList.map(v => (v.value.getClass.toString, 32))//(32 bit integers) for now all variables are of type int
@@ -146,22 +146,77 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     // all variables dependencies in transitions of the hub
     var allDep: Set[Var] = this.trans.flatMap(t => t._2._4.dep ++ t._2._3.vars)
 
-//    var interfaceVarNames:Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
-    var internalVars:Set[Var] = this.getInternalVars //this.getVars.filterNot(v => interfaceVarNames contains v.name)
+    var internalVars:Set[Var] = this.getInternalVars
     var unusedVars:Set[Var] = internalVars -- allProd.intersect(allDep)
 
-    if (unusedVars.isEmpty)
-      this
-    else {
-      var ntrans: Trans = Set()
-      for (t@(from,(to,p,g,u,es)) <- trans) {
-         if (u.vars.intersect(unusedVars).isEmpty)
-           ntrans += t
-         else
-           ntrans += ((from,(to,p,g,Simplify(rmUnusedUpd(u,unusedVars)),es)))
-      }
-      HubAutomata(ports,init,ntrans)
+    // variables that in some transition appear only on the right-hand side (act as dependencies)
+    var areDependencies:Set[Var] = Set()
+    // variables that always act as intermediate
+    var intermediateVars:Set[Var] = Set()
+
+    // get all intermediate variables
+    for (t@(from, (to, p, g, u, es)) <- trans) {
+      var intermediateOfU =  getIntermediateUpd(u,Set())
+      intermediateVars ++=  intermediateOfU -- areDependencies
+      areDependencies ++= u.dep -- intermediateOfU
     }
+
+    var ntrans: Trans = Set()
+    for (t@(from,(to,p,g,u,es)) <- trans) {
+      // remove unused variables of u
+      var cleanUpd = if (u.vars.intersect(unusedVars).isEmpty) u else rmUnusedUpd(u,unusedVars)
+      // remove intermediate variables of u
+      cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
+      ntrans += ((from,(to,p,g,Simplify(cleanUpd),es)))
+    }
+    HubAutomata(ports,init,ntrans)
+  }
+
+  // Todo: refactor
+  private def rmIntermediateUpd(u: Update, intermediate: Set[Var]): Update = {
+    var remap:Map[Var,Expr] = Map()
+
+    def rmInterUpd(u:Update,intermediate:Set[Var]):Update = u match {
+      case a@Asg(x,e) => {
+        var asg:Update = a
+        var expr = e
+        if (intermediate.intersect(e.vars).nonEmpty) {
+          expr = rmInterExpr(e,intermediate)
+        }
+        if (intermediate.contains(x)) {
+          remap += x -> rmInterExpr(expr,intermediate);
+          asg = Noop
+        }
+        if (asg == Noop) Noop else Asg(x,expr)
+      }
+      case Noop => Noop
+      case Seq(u1,u2) => Seq(rmInterUpd(u1,intermediate),rmInterUpd(u2,intermediate))
+      case Par(_,_) => throw new RuntimeException("Removal of intermediate variables must be performed on serialized updates")
+    }
+
+    def rmInterExpr(e:Expr, intermediate:Set[Var]):Expr = e  match {
+      case Val(d) => Val(d)
+      case v@Var(x,va) => {
+        if (intermediate.contains(v))
+          if (remap.contains(v)) remap(v)
+          else throw new RuntimeException("Trying to remove intermediate variable not previously defined") //should never hapend
+        else v
+      }
+      case Fun(n,args) => Fun(n,args.map(e => rmInterExpr(e,intermediate)))
+    }
+
+    rmInterUpd(u,intermediate)
+  }
+
+  // Todo: refactor
+  private def getIntermediateUpd(u:Update, prodBefore:Set[Var]):Set[Var] = u match {
+    case Asg(x,e) => e.vars.intersect(prodBefore)
+    case Noop => Set()
+    case Seq(a@Asg(x,e),u1) =>  getIntermediateUpd(a,prodBefore) ++ getIntermediateUpd(u1, prodBefore + x)
+    case Seq(u1,u2) =>
+      getIntermediateUpd(u1,prodBefore) ++ getIntermediateUpd(u2, prodBefore ++ u1.prod)
+    case Par(u1, u2) =>
+      throw new RuntimeException("Removal of intermediate variables must be performed on serialized updates")
   }
 
   /**

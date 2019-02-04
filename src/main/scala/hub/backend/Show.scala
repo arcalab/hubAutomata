@@ -13,7 +13,7 @@ object Show {
     case Par(u1,u2) => Show(u1) + " | " + Show(u2)
     case Seq(u1,u2) =>  Show(u1) + " ; " + Show(u2)
 //    case Group(u) => "(" + Show(u) + ")"
-    case Noop => "noop"
+    case Noop => "" //"noop"
   }
 
   def apply(e:Expr):String = e match {
