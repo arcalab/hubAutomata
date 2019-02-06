@@ -67,6 +67,13 @@ sealed trait Update {
       this.dep.intersect(other.prod)
   }
 
+  def size: Int = this match {
+    case Asg(x, e) => 1
+    case Par(u1, u2) => u1.size + u2.size
+    case Seq(u1, u2) => u1.size + u2.size
+    case Noop => 0
+  }
+
   /* to string */
 
   override def toString = Show(this)
