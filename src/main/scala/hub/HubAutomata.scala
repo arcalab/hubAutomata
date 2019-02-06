@@ -280,7 +280,7 @@ object HubAutomata {
       case Edge(CPrim("event",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
-      case Edge(CPrim("dataevent",_,_,_), List(a), List(b), _) =>
+      case Edge(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1
           , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
@@ -306,11 +306,29 @@ object HubAutomata {
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
+      case Edge(CPrim("xor",_,_,_), List(a), List(b, c), _) =>
+        (HubAutomata(Set(a, b, c), seed
+          , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
+            ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
+          , seed + 1)
       // if we use onetooneSimple we need to add support for nodes
       case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
+      case Edge(CPrim("resource",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a,b), seed - 1
+          , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
+          ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e))))
+          , seed +2)
+      case Edge(CPrim("blackboard",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a,b), seed -1
+          , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
+            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
+            , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
+            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
+          , seed + 2)
       case Edge(CPrim("semaphore",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b)
           , seed
