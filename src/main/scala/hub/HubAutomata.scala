@@ -35,10 +35,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     for ((from, (to, fire, g, upd, es)) <- trans)
       yield (
         from
-        , s"${Show(Simplify(g))},"+es.map(getName(_,fire))
+        , s"${Show(Simplify(g))}~"+es.map(getName(_,fire))
         .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
-        .mkString(".")+s",${Show(Simplify(upd))}"
+        .mkString(".")+s"~${Show(Simplify(upd))}"
         , (fire,es).hashCode().toString
         , to)
 
