@@ -313,18 +313,25 @@ object HubAutomata {
           , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
             ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
           , seed + 1)
-      // if we use onetooneSimple we need to add support for nodes
       case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
-//      case Edge(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
-//        val i = ins.toSet
-//        val o = outs.toSet
-//        (HubAutomata(i ++ o, seed
-//          , for (xi <- i) yield
-//             seed -> (seed, i++o, Ltrue, /*(for (...) xo := xi)*/ "a" := "b", Set(e)))
-//          , seed + 1)
+      // if we use onetooneSimple we need to add support for nodes
+      case Edge(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
+        val i = ins.toSet
+        val o = outs.toSet
+        (HubAutomata(i ++ o, seed
+          , for (xi <- i) yield
+             seed -> (seed, i++o, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
+          , seed + 1)
+      case Edge(CPrim("node",_,_,extra), ins, outs, _)  =>
+        val i = ins.toSet
+        val o = outs.toSet
+        (HubAutomata(i ++ o, seed
+          , for (xi <- i; xo <- o) yield
+            seed -> (seed, i++o, Ltrue,  xo.toString := xi.toString , Set(e)))
+          , seed + 1)
       case Edge(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
           , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
