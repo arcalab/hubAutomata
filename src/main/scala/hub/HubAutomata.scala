@@ -277,6 +277,8 @@ object HubAutomata {
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
       case Edge(CPrim("id",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+      case Edge(CPrim("port",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
       case Edge(CPrim("event",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
@@ -316,7 +318,7 @@ object HubAutomata {
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
-      case Edge(CPrim("resource",_,_,_), List(a), List(b), _) =>
+      case Edge(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
           , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
           ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e))))
@@ -347,6 +349,35 @@ object HubAutomata {
       // unknown name with type 1->1 -- behave as identity
       case Edge(name, List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+
+
+        /////// FULL //////
+      case Edge(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
+      //For now it doesn't have input Clear. //TODO: add Clear input if desirable
+      case Edge(CPrim("dataEventFull",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed
+          , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
+            seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+          , seed + 2)
+      // for now asumues fifo1 TODO: add support for receiving Size of fifo
+      case Edge(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed,
+          //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
+          Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+          , seed + 2)
+      //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
+      //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
+      case Edge(CPrim("blackboardFull",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a,b), seed
+          , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
+            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
+            , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
+            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
+          , seed + 2)
 
       case Edge(p, _, _, _) =>
         throw new RuntimeException(s"Unknown hub automata for primitive $p")
