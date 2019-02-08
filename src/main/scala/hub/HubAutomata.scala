@@ -39,7 +39,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
         .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
         .mkString(".")+s"~${Show(Simplify(upd))}"
-        , (fire,es).hashCode().toString
+        , (fire,es).hashCode().toString //todo fix needs more than acts (guards and updates)
         , to)
 
   /* Return the set of input ports */
