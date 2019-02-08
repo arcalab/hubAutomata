@@ -199,7 +199,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       case v@Var(x,va) => {
         if (intermediate.contains(v))
           if (remap.contains(v)) remap(v)
-          else throw new RuntimeException("Trying to remove intermediate variable not previously defined") //should never hapend
+          else throw new RuntimeException(s"Trying to remove intermediate variable ${v} not previously defined") //should never hapend
         else v
       }
       case Fun(n,args) => Fun(n,args.map(e => rmInterExpr(e,intermediate)))
@@ -360,11 +360,6 @@ object HubAutomata {
       //    case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
       //      (HubAutomata(Set(a), seed, Set()), seed + 1)
 
-      // unknown name with type 1->1 -- behave as identity
-      case Edge(name, List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
-
-
         /////// FULL //////
       case Edge(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
@@ -392,6 +387,12 @@ object HubAutomata {
             , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
             , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
           , seed + 2)
+
+
+      // unknown name with type 1->1 -- behave as identity
+      case Edge(name, List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+
 
       case Edge(p, _, _, _) =>
         throw new RuntimeException(s"Unknown hub automata for primitive $p")
