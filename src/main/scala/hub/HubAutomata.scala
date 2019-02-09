@@ -7,6 +7,8 @@ import preo.ast.CPrim
 import preo.backend.ReoGraph.Edge
 import preo.backend.{Automata, AutomataBuilder, PortAutomata}
 
+import scala.collection.mutable
+
 
 //case class Edge(prim: String, ins:List[Int], outs:List[Int], parents:List[String])
 //case class ReoGraph(edges:List[Edge], ins:List[Int], outs:List[Int]) {
@@ -238,6 +240,54 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       ntrans += ((from,(to,p,g,u.instance,es)))
 
     HubAutomata(ports,init,ntrans)
+  }
+
+  def wherePortsAre: Map[(Int,Edge),(Guard,Boolean,Int)] = {
+    // SHOULD map each port/edge to: (source state to: condition to fire + canBeSingle)
+    // in the end flatten conditions (with AND) and canBeSingle (with AND) and number of ports of source
+    val res = mutable.Map[(Int,Edge),Map[Int,(Guard,Boolean)]]()
+    for ((from,(to,ps,g,u,es)) <- trans; e <- es) { // for all edges in some transitions
+      val ports = ps intersect(e.ins.toSet ++ e.outs.toSet) // look at transition ports that belong to the edge
+      val canBeSingle = ports.size==1 // only 1 ports
+      for (p <- ports) {
+        val key = (p,e)
+        res += key -> (res.get(key) match {
+          case None => Map(from -> (g,canBeSingle))
+          case Some(srcToSt) => srcToSt.get(from) match {
+            case None => srcToSt + (from -> (g,canBeSingle))
+            case Some((g2,canBeSingle2)) => srcToSt + (from -> (g&&g2,canBeSingle||canBeSingle2)) //g||g2
+          }
+        })
+      }
+    }
+    res
+      .mapValues(src => (src,src.size))
+      .mapValues(ss => (ss._1.foldLeft[(Guard,Boolean)]((Ltrue,true))((prev,next) => (prev._1 && next._2._1 , prev._2 && next._2._2)),ss._2))
+      .mapValues(x => (simplify(x._1._1),x._1._2,x._2))
+      .toMap
+  }
+
+  private def simplify(g:Guard): Guard = g match {
+    case Ltrue => g
+    case Pred(name, param) => g
+    case LOr(g1, g2) => (simplify(g1),simplify(g2)) match {
+      case (Ltrue,g3) => Ltrue
+      case (LNot(Ltrue),g3) => g3
+      case (g3,Ltrue) => Ltrue
+      case (g3,LNot(Ltrue)) => g3
+      case (g3,g4) => LOr(g3,g4)
+    }
+    case LAnd(g1, g2) => (simplify(g1),simplify(g2)) match {
+      case (Ltrue,g3) => g3
+      case (LNot(Ltrue),g3) => LNot(Ltrue)
+      case (g3,Ltrue) => g3
+      case (g3,LNot(Ltrue)) => LNot(Ltrue)
+      case (g3,g4) => LAnd(g3,g4)
+    }
+    case LNot(g1) => simplify(g1) match {
+      case LNot(g2) => g2
+      case g2 => LNot(g2)
+    }
   }
 
   /** List transitions in a pretty-print. */
