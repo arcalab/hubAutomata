@@ -36,10 +36,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       yield (
         from
         , s"${Show(Simplify(g))}~"+es.map(getName(_,fire))
-        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+//        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
         .mkString(".")+s"~${Show(Simplify(upd))}"
-        , (fire,es).hashCode().toString //todo fix needs more than acts (guards and updates)
+        , (g,fire,upd).hashCode().toString
         , to)
 
   /* Return the set of input ports */
@@ -141,6 +141,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     * @return automata without intermediate nor unused variables
     */
   def simplify: HubAutomata = {
+    println(this)
     // all variables produced in transitions of the hub
     val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
     // all variables dependencies in transitions of the hub
@@ -351,14 +352,14 @@ object HubAutomata {
           , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
             seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e))))
           , seed + 1)
-      //    case Edge(CPrim("writer", _, _, _), List(), List(a),_) =>
-      //      (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Set(e)))), seed + 1)
-      //    case Edge(CPrim("reader", _, _, _), List(a), List(),_) =>
-      //      (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Set(e)))), seed + 1)
-      //    case Edge(CPrim("noSnk", _, _, _), List(), List(a),_) =>
-      //      (HubAutomata(Set(a), seed, Set()), seed + 1)
-      //    case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
-      //      (HubAutomata(Set(a), seed, Set()), seed + 1)
+//          case Edge(CPrim("writer", _, _, _), List(), List(a),_) =>
+//            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e)))), seed + 1)
+//          case Edge(CPrim("reader", _, _, _), List(a), List(),_) =>
+//            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e)))), seed + 1)
+//          case Edge(CPrim("noSnk", _, _, _), List(), List(a),_) =>
+//            (HubAutomata(Set(a), seed, Set()), seed + 1)
+//          case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
+//            (HubAutomata(Set(a), seed, Set()), seed + 1)
 
         /////// FULL //////
       case Edge(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
