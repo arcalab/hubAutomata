@@ -293,12 +293,12 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   /** List transitions in a pretty-print. */
   //TODO: show updates and guards as well
   def show: String =
-    s"$init:\n"+trans.map(x=>s" - ${x._1}->${x._2._1} "+
+    s"$init - ${ports.mkString(",")}:\n"+trans.map(x=>s" - ${x._1}->${x._2._1} "+
       s"${x._2._2.toList.sorted.mkString("[",",","]")} "+
-      s"${x._2._5.toList.map(_.prim.name).sorted.mkString("(",",",")")}").mkString("\n")
+      s"${x._2._5.toList.map(x=>x.prim.name + (x.ins++x.outs).mkString("{",",","}")).sorted.mkString("(",",",")")}").mkString("\n")
 
   def smallShow: String = {
-    trans.flatMap(_._2._5).toList.map(_.prim.name).sorted.mkString("Aut(",",",")")
+    trans.flatMap(_._2._5).toList.map(_.toString).sorted.mkString("Aut(",",",")")
   }
 
 }
@@ -463,7 +463,7 @@ object HubAutomata {
     def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 20000)
 
     def join(a1: HubAutomata, a2: HubAutomata, hide: Boolean, timeout: Int): HubAutomata = {
-      //     println(s"combining ${this.show}\nwith ${other.show}")
+      //println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}")
       var seed = 0
       var steps = timeout
       val shared = a1.ports.intersect(a2.ports)
@@ -546,6 +546,12 @@ object HubAutomata {
 
       // hide internal actions if desired
       def mkPorts(fire: Set[Int]): Set[Int] = if (hide) fire -- shared else fire
+      val newPorts = mkPorts(a1.ports ++ a2.ports)
+
+      // hide internal edges if desired
+      def mkEdges(edges: Set[Edge]): Set[Edge] =
+        if (hide) edges.filter(e => e.ins.exists(newPorts) || e.outs.exists(newPorts))
+        else edges
 
       // just 1
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
@@ -557,12 +563,18 @@ object HubAutomata {
           restrans += mkState(p1, from2) -> (mkState(p1, to2), fire2, remapGuard(g2,2), remapUpd(u2,2), es2)
       // communication
       for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; (from2, (to2, fire2, g2, u2, es2)) <- a2.trans) {
-        if (ok2(fire1, fire2))
+        if (ok2(fire1, fire2)) {
+          //println(s"!! merging ${fire1.mkString("/")} and ${fire2.mkString("/")} -> ${mkPorts(fire1++fire2)}")
+          //println(s"!! merging ${es1.mkString("/")} and ${es2.mkString("/")} -> ${mkEdges(es1++es2)}")
           restrans += mkState(from1, from2) ->
-            (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
+            (mkState(to1, to2), mkPorts(fire1 ++ fire2)
+              , remapGuard(g1, 1) && remapGuard(g2, 2)
+              , remapUpd(u1, 1) | remapUpd(u2, 2)
+              , mkEdges(es1 ++ es2))
+        }
       }
       // println(s"ports: $newStates")
-      val res1 = HubAutomata(mkPorts(a1.ports ++ a2.ports), mkState(a1.init, a2.init), restrans)
+      val res1 = HubAutomata(newPorts, mkState(a1.init, a2.init), restrans)
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
       //    println(s"cleaned ${a2.show}")
