@@ -33,13 +33,29 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   def getInit: Int = init
 
   /** Returns the transitions to be displayed */
-  def getTrans: Set[(Int,Any,String,Int)] = // from, label, id, to
+  def getTrans(fullName:Boolean = false): Set[(Int,Any,String,Int)] =
+  // from, label, id, to
+  if (!fullName) {
     for ((from, (to, fire, g, upd, es)) <- trans)
       yield (
         from
-        , s"${Show(Simplify(g))}~"+es.map(getName(_,fire))
-//        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+        , s"${Show(Simplify(g))}~" + es.map(getName(_, fire))
+        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
+        .mkString(".") + s"~${Show(Simplify(upd))}"
+        , (g, fire, upd).hashCode().toString
+        , to)
+  } else getFullNameTrans
+
+
+  /** Returns the transitions to be displayed */
+  def getFullNameTrans: Set[(Int,Any,String,Int)] = // from, label, id, to
+    for ((from, (to, fire, g, upd, es)) <- trans)
+      yield (
+        from
+        , s"${Show(Simplify(g))}~"+cleanFullNameDir(es.map(getFullName(_,fire)).flatten) //.(s => cleanFullNameDir(s))
+        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+//        .foldRight[Set[String]](Set())(cleanDir)
         .mkString(".")+s"~${Show(Simplify(upd))}"
         , (g,fire,upd).hashCode().toString
         , to)
@@ -70,6 +86,29 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     val stSize = getStates.size
     val varSize = getInternalVars.toList.map(v => (v.value.getClass.toString, 32))//(32 bit integers) for now all variables are of type int
     (stSize,varSize)
+  }
+
+  private def getFullName(edge:Edge,fire:Set[Int]): Set[String] = {
+    fire.map(p =>
+      if (edge.ins.contains(p) || edge.outs.contains(p))
+        p.toString + getFullNameDir(edge,p) else "")
+  }
+
+  private def getFullNameDir(edge:Edge, p:Int):String = {
+    if (edge.ins.contains(p))
+      "↓"
+    else if (edge.outs.contains(p))
+      "↑"
+    else ""
+  }
+
+  private def cleanFullNameDir(fire:Set[String]):Set[String] ={
+    var groupByName:Map[String,Set[String]] = fire.groupBy(s => if (s.nonEmpty) s.init else s )
+
+    def clean(p:String, occurences:Set[String]):String =
+      if (occurences.size >1) p+"↕" else occurences.head
+
+    groupByName.map(p => clean(p._1,p._2)).toSet
   }
 
   private def getName2(edge: Edge,fire:Set[Int]):String =
