@@ -364,10 +364,10 @@ object HubAutomata {
           , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
             ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
           , seed + 1)
-      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
-        (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
-          , seed + 1)
+//      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
+//        (HubAutomata(Set(a, b, c), seed
+//          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
+//          , seed + 1)
       // if we use onetooneSimple we need to add support for nodes
       case Edge(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
         val i = ins.toSet
@@ -381,7 +381,7 @@ object HubAutomata {
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i; xo <- o) yield
-            seed -> (seed, i++o, Ltrue,  xo.toString := xi.toString , Set(e)))
+            seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e)))
           , seed + 1)
       case Edge(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
@@ -464,7 +464,7 @@ object HubAutomata {
     def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 20000)
 
     def join(a1: HubAutomata, a2: HubAutomata, hide: Boolean, timeout: Int): HubAutomata = {
-      //     println(s"combining ${this.show}\nwith ${other.show}")
+//           println(s"combining ${a1.show}\nwith ${a2.show}")
       var seed = 0
       var steps = timeout
       val shared = a1.ports.intersect(a2.ports)
@@ -528,12 +528,14 @@ object HubAutomata {
         case LAnd(g1, g2) => LAnd(remapGuard(g1,aut), remapGuard(g2,aut))
       }
 
+
       def remapUpd(u: Update,aut:Int): Update = u match {
         case Noop => Noop
         case Asg(x, e) => Asg(Var(mkVar(x.name,aut)), remapExpr(e,aut))
         case Par(u1, u2) => Par(remapUpd(u1,aut), remapUpd(u2,aut))
         case Seq(u1, u2) => Seq(remapUpd(u1,aut), remapUpd(u2,aut))
       }
+
 
       def remapParam(param: List[Expr],aut:Int): List[Expr] = {
         param.map(remapExpr(_,aut))
@@ -561,13 +563,11 @@ object HubAutomata {
         if (ok2(fire1, fire2))
           restrans += mkState(from1, from2) ->
             (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
+
       }
       // println(s"ports: $newStates")
       val res1 = HubAutomata(mkPorts(a1.ports ++ a2.ports), mkState(a1.init, a2.init), restrans)
-      //    println(s"got ${a.show}")
       val res2 = res1.cleanup
-      //    println(s"cleaned ${a2.show}")
-      //      println(s"${res2.smallShow} -> ${timeout-steps}\n===${res2.show}")
       res2
     }
   }
