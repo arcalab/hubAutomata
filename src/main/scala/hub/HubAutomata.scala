@@ -38,10 +38,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       yield (
         from
         , s"${Show(Simplify(g))}~"+es.map(getName(_,fire))
-        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+//        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
         .foldRight[Set[String]](Set())(cleanDir)
         .mkString(".")+s"~${Show(Simplify(upd))}"
-        , (fire,es).hashCode().toString
+        , (g,fire,upd).hashCode().toString
         , to)
 
   /* Return the set of input ports */
@@ -143,6 +143,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     * @return automata without intermediate nor unused variables
     */
   def simplify: HubAutomata = {
+    println(this)
     // all variables produced in transitions of the hub
     val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
     // all variables dependencies in transitions of the hub
@@ -363,10 +364,10 @@ object HubAutomata {
           , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
             ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
           , seed + 1)
-      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
-        (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
-          , seed + 1)
+//      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
+//        (HubAutomata(Set(a, b, c), seed
+//          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
+//          , seed + 1)
       // if we use onetooneSimple we need to add support for nodes
       case Edge(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
         val i = ins.toSet
@@ -380,7 +381,7 @@ object HubAutomata {
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i; xo <- o) yield
-            seed -> (seed, i++o, Ltrue,  xo.toString := xi.toString , Set(e)))
+            seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e)))
           , seed + 1)
       case Edge(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
@@ -401,14 +402,14 @@ object HubAutomata {
           , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
             seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e))))
           , seed + 1)
-      //    case Edge(CPrim("writer", _, _, _), List(), List(a),_) =>
-      //      (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Set(e)))), seed + 1)
-      //    case Edge(CPrim("reader", _, _, _), List(a), List(),_) =>
-      //      (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Set(e)))), seed + 1)
-      //    case Edge(CPrim("noSnk", _, _, _), List(), List(a),_) =>
-      //      (HubAutomata(Set(a), seed, Set()), seed + 1)
-      //    case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
-      //      (HubAutomata(Set(a), seed, Set()), seed + 1)
+//          case Edge(CPrim("writer", _, _, _), List(), List(a),_) =>
+//            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e)))), seed + 1)
+//          case Edge(CPrim("reader", _, _, _), List(a), List(),_) =>
+//            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e)))), seed + 1)
+//          case Edge(CPrim("noSnk", _, _, _), List(), List(a),_) =>
+//            (HubAutomata(Set(a), seed, Set()), seed + 1)
+//          case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
+//            (HubAutomata(Set(a), seed, Set()), seed + 1)
 
         /////// FULL //////
       case Edge(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
@@ -464,6 +465,7 @@ object HubAutomata {
 
     def join(a1: HubAutomata, a2: HubAutomata, hide: Boolean, timeout: Int): HubAutomata = {
       //println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}")
+      //println(s"combining ${a1.show}\nwith ${a2.show}")
       var seed = 0
       var steps = timeout
       val shared = a1.ports.intersect(a2.ports)
@@ -527,12 +529,14 @@ object HubAutomata {
         case LAnd(g1, g2) => LAnd(remapGuard(g1,aut), remapGuard(g2,aut))
       }
 
+
       def remapUpd(u: Update,aut:Int): Update = u match {
         case Noop => Noop
         case Asg(x, e) => Asg(Var(mkVar(x.name,aut)), remapExpr(e,aut))
         case Par(u1, u2) => Par(remapUpd(u1,aut), remapUpd(u2,aut))
         case Seq(u1, u2) => Seq(remapUpd(u1,aut), remapUpd(u2,aut))
       }
+
 
       def remapParam(param: List[Expr],aut:Int): List[Expr] = {
         param.map(remapExpr(_,aut))
@@ -573,12 +577,11 @@ object HubAutomata {
               , mkEdges(es1 ++ es2))
         }
       }
+      //            (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
       // println(s"ports: $newStates")
       val res1 = HubAutomata(newPorts, mkState(a1.init, a2.init), restrans)
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
-      //    println(s"cleaned ${a2.show}")
-      //      println(s"${res2.smallShow} -> ${timeout-steps}\n===${res2.show}")
       res2
     }
   }
