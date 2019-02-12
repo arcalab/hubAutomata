@@ -187,24 +187,39 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
     // all variables dependencies in transitions of the hub
     var allDep: Set[Var] = this.trans.flatMap(t => t._2._4.dep ++ t._2._3.vars)
+    // variable dependencies in transitions only based on assignments and exclude uppercase vars (assume they are constants)
+    var allDepAsg: Set[Var] = this.trans.flatMap(t => t._2._4.dep).filterNot(v => v.name.matches("[A-Z]*"))
 
     var internalVars:Set[Var] = this.getInternalVars
+    // assigned variables that are never used
     var unusedVars:Set[Var] = internalVars -- allProd.intersect(allDep)
+    // variables that are used as dependencies but never assigned
+    var nonAsgVars:Set[Var] = (allDepAsg -- allProd).intersect(internalVars)
 
     // variables that in some transition appear only on the right-hand side (act as dependencies)
     var areDependencies:Set[Var] = Set()
     // variables that always act as intermediate
     var intermediateVars:Set[Var] = Set()
 
+    //first remove assignements that depend only on nonAsgVars
+    var simplifiedTrans:Trans = this.trans
+    while (nonAsgVars.nonEmpty) {
+      println(s"nonAsigned vars: ${nonAsgVars}")
+      simplifiedTrans = rmDepNotAsg(nonAsgVars,simplifiedTrans)
+      var nProd = simplifiedTrans.flatMap(t => t._2._4.prod)
+      var nDep = simplifiedTrans.flatMap(t => t._2._4.dep).filterNot(v => v.name.matches("[A-Z]*")) //++ t._2._3.vars)
+      nonAsgVars = (nDep -- nProd).intersect(internalVars)
+    }
+
     // get all intermediate variables
-    for (t@(from, (to, p, g, u, es)) <- trans) {
+    for (t@(from, (to, p, g, u, es)) <- simplifiedTrans) {
       var intermediateOfU =  getIntermediateUpd(u,Set())
       intermediateVars ++=  intermediateOfU -- areDependencies
       areDependencies ++= u.dep -- intermediateOfU
     }
 
     var ntrans: Trans = Set()
-    for (t@(from,(to,p,g,u,es)) <- trans) {
+    for (t@(from,(to,p,g,u,es)) <- simplifiedTrans) {
       // remove unused variables of u
       var cleanUpd = if (u.vars.intersect(unusedVars).isEmpty) u else rmUnusedUpd(u,unusedVars)
       // remove intermediate variables of u
@@ -213,6 +228,34 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     }
     HubAutomata(ports,init,ntrans)
   }
+
+
+  /**
+    * Generate transition without assignments that depend only on non-assigned internal vars
+    * @param nonAsg
+    * @return
+    */
+  private def rmDepNotAsg(nonAsg:Set[Var],t:Trans):Trans  = {
+    var ntrans:Trans = Set()
+    for (t@(from,(to,p,g,u,es)) <- t) {
+      ntrans += ((from,(to,p,g,rmNotAsgUpd(u,nonAsg),es)))
+    }
+    ntrans
+  }
+
+  /**
+    * Remove all asignments that depend only on non-assigned internal variables
+    * @param u
+    * @param nonAsg
+    * @return
+    */
+  private def rmNotAsgUpd(u:Update,nonAsg:Set[Var]):Update = u match {
+    case a@Asg(x,e) => if (e.vars.intersect(nonAsg) == e.vars) Noop else a
+    case Noop => Noop
+    case Par(u1,u2) => Par(rmNotAsgUpd(u1,nonAsg),rmNotAsgUpd(u2,nonAsg))
+    case Seq(u1,u2) => Seq(rmNotAsgUpd(u1,nonAsg),rmNotAsgUpd(u2,nonAsg))
+  }
+
 
   // Todo: refactor
   private def rmIntermediateUpd(u: Update, intermediate: Set[Var]): Update = {
