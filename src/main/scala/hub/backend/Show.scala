@@ -19,6 +19,7 @@ object Show {
   def apply(e:Expr):String = e match {
     case Var(n,v) => n
     case Val(d) => d.toString
+    case Cons(n,v) => n
     case Fun(name,a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") =>
       apply(a1)+s" $name "+apply(a2) // parenthesis?
     case Fun(name,args) => s"$name(${args.map(apply).mkString(",")})"
@@ -34,4 +35,5 @@ object Show {
       apply(a1)+name+apply(a2)
     case Pred(name,param) => s"$name(${param.map(apply).mkString(",")})"
   }
+
 }

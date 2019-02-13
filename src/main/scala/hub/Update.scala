@@ -91,6 +91,7 @@ sealed trait Expr {
   def vars:Set[Var] = this match {
     case Var(x,v) => Set(Var(x,v))
     case Val(_) => Set()
+    case Cons(_,_) => Set()
     case Fun(_,args) => args.toSet.flatMap((_:Expr).vars)
   }
 
@@ -99,4 +100,5 @@ sealed trait Expr {
 
 case class Var(name:String,value:Int = 0)   extends Expr
 case class Val(d:Int)                       extends Expr
+case class Cons(name:String,value:Int = 0)  extends Expr
 case class Fun(name:String,args:List[Expr]) extends Expr

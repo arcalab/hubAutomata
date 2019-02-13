@@ -13,7 +13,7 @@ object DSL {
     def :=(e:Expr):Update = Asg(Var(n),e)
   }
 
-  implicit def toVar(s:String):Expr = Var(s)
+  implicit def toVarOrCons(s:String):Expr = if (s.matches("[A-Z]*")) Cons(s) else Var(s)
   implicit def toVal(d:Int):Expr = Val(d)
   implicit def toAssignment(s:String):Assignment = new Assignment(s)
 
