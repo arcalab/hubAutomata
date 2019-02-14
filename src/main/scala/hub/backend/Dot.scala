@@ -39,7 +39,7 @@ object Dot {
        |node [margin=0.1 width=1 height=0.2,shape="circle"]
        |edge [arrowsize=0.7]
        |
-       |${mkHubLinks(hub.getTrans)}
+       |${mkHubLinks(hub.getTrans())}
        |
        |}
     """.stripMargin
