@@ -53,8 +53,10 @@ object Simplify {
       case (g3, LNot(e4)) => if (g3 == e4) LNot(Ltrue) else LAnd(g3, LNot(e4))
       case (g3, g4) => if (g3 == g4) g3 else LAnd(g3, g4)
     }
-    case LNot(LNot(g1)) => apply(g1)
-    case LNot(g1) => LNot(apply(g1))
+    case LNot(g1) => apply(g1) match {
+      case LNot(g2) => g2
+      case g2 => LNot(g2)
+    }
     case Pred(_,_) => g
   }
 }

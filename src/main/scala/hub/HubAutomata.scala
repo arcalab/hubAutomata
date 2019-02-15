@@ -33,8 +33,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   def getInit: Int = init
 
   /** Returns the transitions to be displayed */
-  override def getTrans: Automata.Trans = getTrans(false)
-  private def getTrans(fullName:Boolean): Set[(Int,Any,String,Int)] =
+  override def getTrans(fullName:Boolean = false): Set[(Int,Any,String,Int)] =
   // from, label, id, to
   if (!fullName) {
     for ((from, (to, fire, g, upd, es)) <- trans)
@@ -348,31 +347,8 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     res
       .mapValues(src => (src,src.size))
       .mapValues(ss => (ss._1.foldLeft[(Guard,Boolean)]((Ltrue,true))((prev,next) => (prev._1 && next._2._1 , prev._2 && next._2._2)),ss._2))
-      .mapValues(x => (simplify(x._1._1),x._1._2,x._2))
+      .mapValues(x => (Simplify(x._1._1),x._1._2,x._2))
       .toMap
-  }
-
-  private def simplify(g:Guard): Guard = g match {
-    case Ltrue => g
-    case Pred(name, param) => g
-    case LOr(g1, g2) => (simplify(g1),simplify(g2)) match {
-      case (Ltrue,g3) => Ltrue
-      case (LNot(Ltrue),g3) => g3
-      case (g3,Ltrue) => Ltrue
-      case (g3,LNot(Ltrue)) => g3
-      case (g3,g4) => LOr(g3,g4)
-    }
-    case LAnd(g1, g2) => (simplify(g1),simplify(g2)) match {
-      case (Ltrue,g3) => g3
-      case (LNot(Ltrue),g3) => LNot(Ltrue)
-      case (g3,Ltrue) => g3
-      case (g3,LNot(Ltrue)) => LNot(Ltrue)
-      case (g3,g4) => LAnd(g3,g4)
-    }
-    case LNot(g1) => simplify(g1) match {
-      case LNot(g2) => g2
-      case g2 => LNot(g2)
-    }
   }
 
   /** List transitions in a pretty-print. */
@@ -557,7 +533,7 @@ object HubAutomata {
       var restrans = Set[(Int, (Int, Set[Int], Guard, Update, Set[Edge]))]()
       var newStates = Map[(Int, Int), Int]()
 
-      println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")
+      // println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")
 
       def mkState(i1: Int, i2: Int) = if (newStates.contains((i1, i2)))
         newStates((i1, i2))

@@ -25,5 +25,3 @@ case class Pred(name:String, param:List[Expr]) extends Guard
 case class LOr(g1:Guard,g2:Guard)             extends Guard
 case class LAnd(g1:Guard,g2:Guard)            extends Guard
 case class LNot(g:Guard)                      extends Guard
-
-
