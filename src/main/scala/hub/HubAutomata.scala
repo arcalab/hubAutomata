@@ -53,7 +53,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     for ((from, (to, fire, g, upd, es)) <- trans)
       yield (
         from
-        , s"${Show(Simplify(g))}~"+cleanFullNameDir(es.map(getFullName(_,fire)).flatten) //.(s => cleanFullNameDir(s))
+        , s"${Show(Simplify(g))}~"+cleanFullNameDir(es.flatMap(getFullName(_, fire))) //.(s => cleanFullNameDir(s))
         //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
 //        .foldRight[Set[String]](Set())(cleanDir)
         .mkString(".")+s"~${Show(Simplify(upd))}"
@@ -75,7 +75,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   def getVars:Set[Var] = (for((_,(_,_,g,u,_)) <- trans) yield g.vars ++ u.vars).flatten
 
   def getInternalVars:Set[Var] = {
-    var globalVars: Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
+    val globalVars: Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
     (for ((_, (_, _, g, u, _)) <- trans) yield g.vars ++ u.vars).flatten.filterNot(v => globalVars.contains(v.name))
   }
 
@@ -330,18 +330,21 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     // SHOULD map each port/edge to: (source state to: condition to fire + canBeSingle)
     // in the end flatten conditions (with AND) and canBeSingle (with AND) and number of ports of source
     val res = mutable.Map[(Int,Edge),Map[Int,(Guard,Boolean)]]()
-    for ((from,(to,ps,g,u,es)) <- trans; e <- es) { // for all edges in some transitions
-      val ports = ps intersect(e.ins.toSet ++ e.outs.toSet) // look at transition ports that belong to the edge
-      val canBeSingle = ports.size==1 // only 1 ports
-      for (p <- ports) {
-        val key = (p,e)
-        res += key -> (res.get(key) match {
-          case None => Map(from -> (g,canBeSingle))
-          case Some(srcToSt) => srcToSt.get(from) match {
-            case None => srcToSt + (from -> (g,canBeSingle))
-            case Some((g2,canBeSingle2)) => srcToSt + (from -> (g&&g2,canBeSingle||canBeSingle2)) //g||g2
-          }
-        })
+    for ((from,(to,ps,g,u,es)) <- trans) {
+      val canBeSingle = ps.size == 1 // only 1 ports
+      //println(s"--- can be single? [${ps.mkString(",")}] - $canBeSingle")
+      for (e <- es) { // for all edges in some transitions
+        val ports = ps intersect (e.ins.toSet ++ e.outs.toSet) // look at transition ports that belong to the edge
+        for (p <- ports) {
+          val key = (p, e)
+          res += key -> (res.get(key) match {
+            case None => Map(from -> (g, canBeSingle))
+            case Some(srcToSt) => srcToSt.get(from) match {
+              case None => srcToSt + (from -> (g, canBeSingle))
+              case Some((g2, canBeSingle2)) => srcToSt + (from -> (g && g2, canBeSingle || canBeSingle2)) //g||g2
+            }
+          })
+        }
       }
     }
     res
