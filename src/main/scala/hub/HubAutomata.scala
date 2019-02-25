@@ -32,33 +32,48 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   /** Returns the initial state */
   def getInit: Int = init
 
+//  /** Returns the transitions to be displayed */
+//  override def getTrans(fullName:Boolean = false): Set[(Int,Any,String,Int)] =
+//  // from, label, id, to
+//  if (!fullName) {
+//    for ((from, (to, fire, g, upd, es)) <- trans)
+//      yield (
+//        from
+//        , s"${Show(Simplify(g))}~" + es.map(getName(_, fire))
+//        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+//        .foldRight[Set[String]](Set())(cleanDir)
+//        .mkString(".") + s"~${Show(Simplify(upd))}"
+//        , (g, fire, upd,es).hashCode().toString
+//        , to)
+//  } else getFullNameTrans
+
   /** Returns the transitions to be displayed */
-  override def getTrans(fullName:Boolean = false): Set[(Int,Any,String,Int)] =
-  // from, label, id, to
-  if (!fullName) {
+  override def getTrans(fullName:Boolean = false): Set[(Int, Any,String,Int)] = {
     for ((from, (to, fire, g, upd, es)) <- trans)
       yield (
         from
-        , s"${Show(Simplify(g))}~" + es.map(getName(_, fire))
-        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
-        .foldRight[Set[String]](Set())(cleanDir)
-        .mkString(".") + s"~${Show(Simplify(upd))}"
+        , s"${Show(Simplify(if(fullName) mkPortInGuard(g) else g))}~"
+          + s"${if (fullName)
+              cleanFullNameDir(es.flatMap(getFullName(_, fire))).mkString(".")
+            else
+              es.map(getName(_, fire)).foldRight[Set[String]](Set())(cleanDir).mkString(".")}"
+          + s"~${Show(Simplify(if (fullName) mkPortInUpd(upd) else upd))}"
         , (g, fire, upd,es).hashCode().toString
         , to)
-  } else getFullNameTrans
+  }
 
 
-  /** Returns the transitions to be displayed */
-  def getFullNameTrans: Set[(Int,Any,String,Int)] = // from, label, id, to
-    for ((from, (to, fire, g, upd, es)) <- trans)
-      yield (
-        from
-        , s"${Show(Simplify(g))}~"+cleanFullNameDir(es.flatMap(getFullName(_, fire))) //.(s => cleanFullNameDir(s))
-        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
-//        .foldRight[Set[String]](Set())(cleanDir)
-        .mkString(".")+s"~${Show(Simplify(upd))}"
-        , (g,fire,upd,es).hashCode().toString
-        , to)
+//  /** Returns the transitions to be displayed */
+//  def getFullNameTrans: Set[(Int,Any,String,Int)] = // from, label, id, to
+//    for ((from, (to, fire, g, upd, es)) <- trans)
+//      yield (
+//        from
+//        , s"${Show(mkPortInGuard(Simplify(g)))}~"+cleanFullNameDir(es.flatMap(getFullName(_, fire))) //.(s => cleanFullNameDir(s))
+//        //        .filterNot(s => s=="sync" || s=="sync↓" || s=="sync↑" || s=="sync↕")
+////        .foldRight[Set[String]](Set())(cleanDir)
+//        .mkString(".")+s"~${Show(mkPortInUpd(Simplify(upd)))}"
+//        , (g,fire,upd,es).hashCode().toString
+//        , to)
 
   /* Return the set of input ports */
   def getInputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten intersect ports
@@ -88,10 +103,23 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     (stSize,varSize)
   }
 
+  private def mkPortName(p:Int):String = {
+    var res = ""
+    if (getInputs.contains(p)){
+      var inIndex:Map[Int,Int] = this.getInputs.zip(Stream from 1).toMap //WithIndex.toMap
+      res = s"in${if (inIndex.size >1) inIndex(p) else "" }"
+    }
+    if (getOutputs.contains(p)) {
+      var outIndex:Map[Int,Int] = this.getOutputs.zip(Stream from 1).toMap
+     res = s"out${if (outIndex.size >1) outIndex(p) else "" }"
+    }
+    res
+  }
+
   private def getFullName(edge:Edge,fire:Set[Int]): Set[String] = {
     fire.map(p =>
       if (edge.ins.contains(p) || edge.outs.contains(p))
-        p.toString + getFullNameDir(edge,p) else "")
+        mkPortName(p) + getFullNameDir(edge,p) else "")
   }
 
   private def getFullNameDir(edge:Edge, p:Int):String = {
@@ -109,6 +137,49 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       if (occurences.size >1) p+"↕" else occurences.head
 
     groupByName.map(p => clean(p._1,p._2)).toSet
+  }
+
+//  private def getUpdName(u:Update):Update = u match {
+//    case Asg(x, e) =>
+//  }
+
+  /**
+    * Rename variables that belong to ports in expresions
+    * @param e
+    * @return
+    */
+  private def mkPortInExp(e:Expr):Expr = e match {
+    case Var(n,v) if (getInputs++getOutputs).map(_.toString()).contains(n) => Var(mkPortName(n.toInt),v)
+    case Fun(n,args) => Fun(n,args.map(p=> mkPortInExp(p)))
+    case e1 => e1
+  }
+
+  /**
+    * Rename variables that belong to ports in updates
+    * @param u
+    * @return
+    */
+  private def mkPortInUpd(u:Update):Update = u match {
+    case Asg(x, e) =>
+      Asg(if ((getInputs++getOutputs).map(_.toString()).contains(x.name)) Var(mkPortName(x.name.toInt),x.value)
+          else x
+        , mkPortInExp(e))
+    case Seq(u1, u2) => Seq(mkPortInUpd(u1),mkPortInUpd(u2))
+    case Par(u1, u2) => Par(mkPortInUpd(u1),mkPortInUpd(u2))
+    case u1 => u1
+  }
+
+  /**
+    * Rename variables that belong to ports in guards
+    * @param g
+    * @return
+    */
+  private def mkPortInGuard(g:Guard):Guard = g match {
+    case Pred(n, p) => Pred(n, p.map(mkPortInExp(_)))
+    case LAnd(g1, g2) => LAnd(mkPortInGuard(g1),mkPortInGuard(g2))
+    case LOr(g1, g2) => LOr(mkPortInGuard(g1),mkPortInGuard(g2))
+    case LNot(g1) => LNot(mkPortInGuard(g1))
+    case Ltrue => Ltrue
   }
 
   private def getName2(edge: Edge,fire:Set[Int]):String =
