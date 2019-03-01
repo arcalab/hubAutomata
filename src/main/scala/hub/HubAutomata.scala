@@ -227,7 +227,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
   }
 
   /**
-    * Rename variables that belong to ports in updates 
+    * Rename variables that belong to ports in updates
     * @param u
     * @return
     */
@@ -581,7 +581,7 @@ object HubAutomata {
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i) yield
-             seed -> (seed, i++o, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
+            seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
           , seed + 1)
       case Edge(CPrim("node",_,_,extra), ins, outs, _)  =>
         val i = ins.toSet
