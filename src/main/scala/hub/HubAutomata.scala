@@ -1,6 +1,5 @@
 package hub
 
-import common.widgets.virtuoso.VirtuosoParser
 import hub.HubAutomata.Trans
 import hub.DSL._
 import hub.backend.{Show, Simplify}
@@ -137,7 +136,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       // get the reo edge to which p belongs (there is only one because it is an in or out)
       var e = t.get._2._5.find(e => (e.outs ++ e.ins).contains(p))
 
-      if (VirtuosoParser.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
+      if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
         name = getPortIndexedName(p)
       else
         name = e.get.prim.name // if it is user define name, use it
@@ -512,6 +511,23 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
 }
 
 object HubAutomata {
+
+  val PRIMITIVE = Set(
+    "semaphore"
+    , "resource"
+    , "port"
+    , "dataEvent"
+    , "event"
+    , "fifo"
+    , "blackboard"
+    , "node"
+    , "dupl"
+    , "dupls"
+    , "xor"
+    , "xors"
+    , "mrg"
+    , "drain"
+  )
 
   //TODO: add guard to Trans
   // from -> (target, ports, guards, update, originalEdge)
