@@ -21,7 +21,7 @@ object ContextSwitch {
     println(s"intersection: ${(hub.getInputs ++ hub.getOutputs).intersect(patternInt.toSet)}")
     // Check if all actions in pattern ar part of the interface otherwise error
     if ((hub.getInputs ++ hub.getOutputs).intersect(patternInt.toSet) != patternInt.toSet)
-//      throw new RuntimeException("Only interface actions can be referred")
+      throw new RuntimeException("Only interface actions can be referred")
     // create a map to easily access outgoin transition from each state
     var mapAut:Map[Int,Set[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])]] = Map()
     for (t <- hub.trans) mapAut += (t._1 -> (mapAut.getOrElse(t._1,Set()) ++ Set(t._2)))
