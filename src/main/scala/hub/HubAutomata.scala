@@ -118,7 +118,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     * @param p
     * @return
     */
-  private def getPortName(p:Int):String = {
+   def getPortName(p:Int):String = {
     portName.getOrElse(p,mkPortName(p))
   }
 

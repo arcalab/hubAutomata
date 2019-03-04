@@ -2,6 +2,8 @@ package hub
 
 import hub.analyse.DependencyGraph
 import hub.backend.Dot
+import hub.common.ParseException
+import hub.lang.Parser
 
 /**
   * Created by guille on 18/12/2018.
@@ -21,4 +23,9 @@ object DSL {
 
   def getDG(u:Update) = DependencyGraph(u)
 
+  def parsePattern(pattern:String):List[String] = Parser.parsePattern(pattern) match {
+    case Parser.Success(f,_) => f
+    case f:Parser.NoSuccess =>
+      throw new ParseException(f.toString)
+  }
 }
