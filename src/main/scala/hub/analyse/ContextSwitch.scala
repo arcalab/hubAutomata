@@ -10,33 +10,34 @@ import preo.backend.ReoGraph
 
 object ContextSwitch {
 
-//  type CS = List[(Int, String, Int)] // (from, by, to)
-
-  def apply(hub:HubAutomata, pattern:List[String]):(Boolean, List[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])],Int)={//CS ={
+  def apply(hub:HubAutomata, pattern:List[String]):(Boolean, List[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])],Int)={
 
     var fromNameToInt:Map[String,Int] = (for (p <- hub.getInputs++hub.getOutputs) yield (hub.getPortName(p),p)).toMap
-//    println(s"ports: ${(hub.getInputs ++ hub.getOutputs)}")
-//    println(s"pattern actions: ${pattern.map(a => s"$a -> ${fromNameToInt.getOrElse(a,-1)}")}")
     var patternInt = pattern.map(a => fromNameToInt(a))
-    println(s"intersection: ${(hub.getInputs ++ hub.getOutputs).intersect(patternInt.toSet)}")
+
     // Check if all actions in pattern ar part of the interface otherwise error
     if ((hub.getInputs ++ hub.getOutputs).intersect(patternInt.toSet) != patternInt.toSet)
       throw new RuntimeException("Only interface actions can be referred")
+
     // create a map to easily access outgoin transition from each state
     var mapAut:Map[Int,Set[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])]] = Map()
     for (t <- hub.trans) mapAut += (t._1 -> (mapAut.getOrElse(t._1,Set()) ++ Set(t._2)))
+
     findATrace(hub.init,mapAut,patternInt,Set())//hub.init))
   }
 
   def findATrace(from:Int
                  ,map:Map[Int,Set[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])]]
                  ,pattern:List[Int],visited:Set[Int]):(Boolean, List[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])],Int) = pattern match {//List[(Int,Any,String,Int)],Int) = pattern match {
+
     case Nil        => (true,List(),0)
-    case head::rest => {
+    case head::rest =>
+
       var toVisit = map(from).filterNot(t => visited.contains((t._2,t._3,t._4,t._5).hashCode()))
       var minCs = Int.MaxValue
       var bestT:List[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])] = List()
       var solution:Boolean = false
+
       for (t <- toVisit) {
         // res = (found, foundTrace, foundCost)
         var res:(Boolean, List[(Int,Set[Int],Guard,Update,Set[ReoGraph.Edge])],Int) = (false,List(),0)
@@ -55,8 +56,8 @@ object ContextSwitch {
           }
         }
       }
+
       (solution, bestT, minCs)
-    }
   }
 
 }
