@@ -4,7 +4,7 @@ import hub.HubAutomata.Trans
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import preo.ast.CPrim
-import preo.backend.ReoGraph.Edge
+import preo.backend.Network.Prim
 import preo.backend.{Automata, AutomataBuilder, PortAutomata}
 
 import scala.collection.JavaConverters._
@@ -18,11 +18,12 @@ import scala.collection.mutable
 
 
 /**
-  * Representation of an automata, aimed at being generated from a [[preo.backend.ReoGraph]].
+  * Representation of an automata, aimed at being generated from a [[preo.backend.Network]].
+ *
   * @param ports Represent the possible labels (actions)
-  * @param init Initial state
+  * @param init  Initial state
   * @param trans Transitions - Relation between input and output states, with associated
-  *              sets of actions and of edges (as in [[Edge]]).
+  *              sets of actions and of edges (as in [[Prim]]).
   */
 case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
 
@@ -253,10 +254,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     case Ltrue => Ltrue
   }
 
-  private def getName2(edge: Edge,fire:Set[Int]):String =
+  private def getName2(edge: Prim, fire:Set[Int]):String =
     s"${edge.prim}-${edge.parents.mkString("/")}-${fire.mkString(":")}"
 
-  private def getName(edge: Edge,fire:Set[Int]):String =
+  private def getName(edge: Prim, fire:Set[Int]):String =
     if (fire.intersect((edge.ins ++ edge.outs).toSet).nonEmpty) {
       (edge.parents match {
         case Nil     => edge.prim.name
@@ -266,7 +267,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     } else ""  //+
   //  s"[${edge.ins.toSet.intersect(fire).mkString("|")}->${edge.outs.toSet.intersect(fire).mkString("|")}]"
   //  fire.mkString("|")
-  private def getDir(edge: Edge,fire:Set[Int]): String = {
+  private def getDir(edge: Prim, fire:Set[Int]): String = {
       val src = (edge.ins.toSet intersect fire).nonEmpty
       val snk = (edge.outs.toSet intersect fire).nonEmpty
       (src, snk) match {
@@ -294,7 +295,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     }
   } else rest
 
-  private def printPrim(edge: Edge):String = {
+  private def printPrim(edge: Prim):String = {
     s"""${edge.prim}-${edge.ins.mkString(".")}-${edge.outs.mkString(".")}"""
   }
 
@@ -468,10 +469,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     HubAutomata(ports,init,ntrans)
   }
 
-  def wherePortsAre: Map[(Int,Edge),(Guard,Boolean,Int)] = {
+  def wherePortsAre: Map[(Int,Prim),(Guard,Boolean,Int)] = {
     // SHOULD map each port/edge to: (source state to: condition to fire + canBeSingle)
     // in the end flatten conditions (with AND) and canBeSingle (with AND) and number of ports of source
-    val res = mutable.Map[(Int,Edge),Map[Int,(Guard,Boolean)]]()
+    val res = mutable.Map[(Int,Prim),Map[Int,(Guard,Boolean)]]()
     for ((from,(to,ps,g,u,es)) <- trans) {
       val canBeSingle = ps.size == 1 // only 1 ports
       //println(s"--- can be single? [${ps.mkString(",")}] - $canBeSingle")
@@ -531,7 +532,7 @@ object HubAutomata {
 
   //TODO: add guard to Trans
   // from -> (target, ports, guards, update, originalEdge)
-  type Trans = Set[(Int,(Int,Set[Int],Guard, Update,Set[Edge]))]
+  type Trans = Set[(Int,(Int,Set[Int],Guard, Update,Set[Prim]))]
 
 
 //  def mkVar(start:String, ports:List[Int]):String = ports.mkString(start,"_","")
@@ -546,24 +547,24 @@ object HubAutomata {
       * @param seed current counter used to generate state names
       * @return new HubAutomata and updated counter for state names
       */
-    def buildAutomata(e: Edge, seed: Int): (HubAutomata, Int) = e match {
-      case Edge(CPrim("sync",_,_,_), List(a), List(b), _) =>
+    def buildAutomata(e: Prim, seed: Int): (HubAutomata, Int) = e match {
+      case Prim(CPrim("sync",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
-      case Edge(CPrim("id",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("id",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
-      case Edge(CPrim("port",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("port",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
-      case Edge(CPrim("event",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("event",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
-      case Edge(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1
           , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
-      case Edge(CPrim("fifo",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("fifo",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
@@ -571,18 +572,18 @@ object HubAutomata {
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
-      case Edge(CPrim("drain",_,_,_), List(a, b), List(), _) =>
+      case Prim(CPrim("drain",_,_,_), List(a, b), List(), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, Noop, Set(e)))), seed + 1)
-      case Edge(CPrim("merger",_,_,_), List(a, b), List(c), _) =>
+      case Prim(CPrim("merger",_,_,_), List(a, b), List(c), _) =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, c), Ltrue, c.toString := a.toString, Set(e)),
             seed -> (seed, Set(b, c), Ltrue, c.toString := b.toString, Set(e))))
           , seed + 1)
-      case Edge(CPrim("dupl",_,_,_), List(a), List(b, c), _) =>
+      case Prim(CPrim("dupl",_,_,_), List(a), List(b, c), _) =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
           , seed + 1)
-      case Edge(CPrim("xor",_,_,_), List(a), List(b, c), _) =>
+      case Prim(CPrim("xor",_,_,_), List(a), List(b, c), _) =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
             ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
@@ -592,26 +593,26 @@ object HubAutomata {
 //          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
 //          , seed + 1)
       // if we use onetooneSimple we need to add support for nodes
-      case Edge(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
+      case Prim(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
         val i = ins.toSet
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i) yield
             seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
           , seed + 1)
-      case Edge(CPrim("node",_,_,extra), ins, outs, _)  =>
+      case Prim(CPrim("node",_,_,extra), ins, outs, _)  =>
         val i = ins.toSet
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i; xo <- o) yield
             seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e)))
           , seed + 1)
-      case Edge(CPrim("resource",_,_,_), List(a,b), List(), _) =>
+      case Prim(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
           , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
           ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e))))
           , seed +2)
-      case Edge(CPrim("blackboard",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("blackboard",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a,b), seed -1
           , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
             , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
@@ -619,33 +620,33 @@ object HubAutomata {
             , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
             , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
           , seed + 2)
-      case Edge(CPrim("semaphore",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("semaphore",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b)
           , seed
           , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
             seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e))))
           , seed + 1)
-          case Edge(CPrim("writer", _, _, _), List(), List(a),_) =>
+          case Prim(CPrim("writer", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e)))), seed + 1)
-          case Edge(CPrim("reader", _, _, _), List(a), List(),_) =>
+          case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
             (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e)))), seed + 1)
-          case Edge(CPrim("noSnk", _, _, _), List(), List(a),_) =>
+          case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), seed, Set()), seed + 1)
-          case Edge(CPrim("noSrc", _, _, _), List(a), List(),_) =>
+          case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
             (HubAutomata(Set(a), seed, Set()), seed + 1)
 
         /////// FULL //////
-      case Edge(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
-      case Edge(CPrim("dataEventFull",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("dataEventFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed
           , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
-      case Edge(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
@@ -653,7 +654,7 @@ object HubAutomata {
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
-      case Edge(CPrim("blackboardFull",_,_,_), List(a), List(b), _) =>
+      case Prim(CPrim("blackboardFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a,b), seed
           , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
             , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
@@ -663,11 +664,11 @@ object HubAutomata {
           , seed + 2)
 
       // unknown name with type 1->1 -- behave as identity
-      case Edge(name, List(a), List(b), _) =>
+      case Prim(name, List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
 
 
-      case Edge(p, _, _, _) =>
+      case Prim(p, _, _, _) =>
         throw new RuntimeException(s"Unknown hub automata for primitive $p")
 
     }
@@ -692,7 +693,7 @@ object HubAutomata {
       var seed = 0
       var steps = timeout
       val shared = a1.ports.intersect(a2.ports)
-      var restrans = Set[(Int, (Int, Set[Int], Guard, Update, Set[Edge]))]()
+      var restrans = Set[(Int, (Int, Set[Int], Guard, Update, Set[Prim]))]()
       var newStates = Map[(Int, Int), Int]()
 
       // println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")
@@ -779,7 +780,7 @@ object HubAutomata {
       val newPorts = mkPorts(a1.ports ++ a2.ports)
 
       // hide internal edges if desired
-      def mkEdges(edges: Set[Edge]): Set[Edge] =
+      def mkEdges(edges: Set[Prim]): Set[Prim] =
         if (hide) edges.filter(e => e.ins.exists(newPorts) || e.outs.exists(newPorts))
         else edges
 
