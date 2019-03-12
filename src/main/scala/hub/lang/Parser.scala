@@ -1,5 +1,6 @@
 package hub.lang
 
+import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
 
 /**
@@ -11,7 +12,8 @@ object Parser extends RegexParsers{
 
   def parsePattern(p:String):ParseResult[List[String]] = parseAll(pattern,p)
 
-
+  override def skipWhitespace = true
+  override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
   val portName:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r ^^ { _.toString }
   val num:Parser[Int] = """[0-9]*""".r ^^ {_.toInt}
 
