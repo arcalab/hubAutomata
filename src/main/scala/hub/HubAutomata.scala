@@ -29,9 +29,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
 
   private var inSeed = 0
   private var outSeed = 0
-//  private val inIndex:Map[Int,Int] = this.getInputs.zip(Stream from 1).toMap
-//  private val outIndex:Map[Int,Int] = this.getOutputs.zip(Stream from 1).toMap
-  private var portName:Map[Int,String] = Map()
+
+//  private var portName:Map[Int,String] = Map()
+  private lazy val portName:Map[Int,String] =
+    (getInputs++getOutputs).map(p => p -> mkPortName(p)).toMap
 
 
   /** Collects all states, seen as integers */
@@ -111,15 +112,18 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     (stSize,varSize)
   }
 
+
   /**
-    * Returns the name of an interface port,
-    * if the name has been already calculated, it uses such a name
-    * otherwise it calculates the name and returns it
+    * Returns the name of an interface port
     * @param p
     * @return
     */
    def getPortName(p:Int):String = {
-    portName.getOrElse(p,mkPortName(p))
+//    portName.getOrElse(p,mkPortName(p))
+     if ((getInputs++getOutputs).contains(p))
+        portName.getOrElse(p,p.toString)
+     else
+       throw new RuntimeException(s"Unknown port, ${p}, for this automaton")
   }
 
   /**
@@ -141,7 +145,8 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
         name = getPortIndexedName(p)
       else
         name = e.get.prim.name // if it is user define name, use it
-      portName += (p -> name)
+
+//      portName += (p -> name)
     }
     name
   }
