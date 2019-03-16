@@ -535,7 +535,7 @@ object HubAutomata {
     , "drain"
   )
 
-  //TODO: add guard to Trans
+
   // from -> (target, ports, guards, update, originalEdge)
   type Trans = Set[(Int,(Int,Set[Int],Guard, Update,Set[Prim]))]
 
