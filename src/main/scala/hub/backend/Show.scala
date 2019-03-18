@@ -28,8 +28,8 @@ object Show {
   def apply(g:Guard):String = g match {
     case Ltrue => "⊤"
     case LNot(Ltrue) => "⊥"
-    case LOr(g1, g2) => apply(g1) + " || " + apply(g2)
-    case LAnd(g1, g2) => apply(g1) + " && " + apply(g2)
+    case LOr(g1, g2) => apply(g1) + " | " + apply(g2)
+    case LAnd(g1, g2) => apply(g1) + " & " + apply(g2)
     case LNot(g) => s"¬(${apply(g)})"
     case Pred(name, a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") =>
       apply(a1)+name+apply(a2)
