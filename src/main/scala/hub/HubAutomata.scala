@@ -3,6 +3,7 @@ package hub
 import hub.HubAutomata.Trans
 import hub.DSL._
 import hub.backend.{Show, Simplify}
+import hub.common.GenerationException
 import preo.ast.CPrim
 import preo.backend.Network.Prim
 import preo.backend.{Automata, AutomataBuilder, PortAutomata}
@@ -559,6 +560,9 @@ object HubAutomata {
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
       case Prim(CPrim("port",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+      case Prim(CPrim("lossy",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))
+                                         ,seed -> (seed, Set(a)   , Ltrue, Noop                    , Set(e)))), seed + 1)
       case Prim(CPrim("event",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
@@ -598,6 +602,8 @@ object HubAutomata {
 //          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
 //          , seed + 1)
       // if we use onetooneSimple we need to add support for nodes
+      case Prim(CPrim("node",_,_,extra), _, _, _) if extra.intersect(Set("vdupl","vmrg","vxor")).nonEmpty =>
+        throw new GenerationException(s"Connector with variable parts ${extra.mkString(",")}, to be interpreted only as an IFTA instance")
       case Prim(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
         val i = ins.toSet
         val o = outs.toSet
@@ -605,7 +611,7 @@ object HubAutomata {
           , for (xi <- i) yield
             seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
           , seed + 1)
-      case Prim(CPrim("node",_,_,extra), ins, outs, _)  =>
+      case Prim(CPrim("node",_,_,extra), ins, outs, _) =>
         val i = ins.toSet
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
@@ -651,6 +657,8 @@ object HubAutomata {
             seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
+      case Prim(CPrim("fifofull",x,y,z), a, b, c) =>
+        buildAutomata(Prim(CPrim("fifofull",x,y,z), a, b, c),seed)
       case Prim(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
@@ -667,6 +675,10 @@ object HubAutomata {
             , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
             , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
           , seed + 2)
+
+
+      case Prim(p, List(_), List(_), _) =>
+        throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
 
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
