@@ -677,7 +677,7 @@ object HubAutomata {
           , seed + 2)
 
 
-      case Prim(p, List(_), List(_), _) =>
+      case Prim(CPrim("timer",_,_,_), _, _, _) =>
         throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
 
       // unknown name with type 1->1 -- behave as identity

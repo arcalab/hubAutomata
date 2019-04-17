@@ -102,7 +102,7 @@ object DependencyGraph {
     var links: Set[(Asg,Asg)] = Set()
     var toVisit = dgs
     for (dg <- dgs) {
-      toVisit  = dgs - dg
+      toVisit  = toVisit - dg //dgs - dg
       links ++= mkDepCons(dg, toVisit)
     }
     DependencyGraph(dgs.flatMap(_.nodes),dgs.flatMap(_.links) ++ links)
