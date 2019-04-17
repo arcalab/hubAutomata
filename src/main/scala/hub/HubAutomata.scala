@@ -1,6 +1,6 @@
 package hub
 
-import hub.HubAutomata.Trans
+import hub.HubAutomata.{Trans,Valuation}
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import hub.common.GenerationException
@@ -26,7 +26,7 @@ import scala.collection.mutable
   * @param trans Transitions - Relation between input and output states, with associated
   *              sets of actions and of edges (as in [[Prim]]).
   */
-case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
+case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) extends Automata {
 
   private var inSeed = 0
   private var outSeed = 0
@@ -322,7 +322,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
         if (!(done contains to)) missing += to
       }
     }
-    HubAutomata(ports, init, ntrans)
+    HubAutomata(ports, init, ntrans, initVal)
   }
 
   // TODO: maybe move these methods to Simplify?
@@ -375,7 +375,10 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
       cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
       ntrans += ((from,(to,p,g,Simplify(cleanUpd),es)))
     }
-    HubAutomata(ports,init,ntrans)
+
+    val nInitVal = initVal -- unusedVars
+
+    HubAutomata(ports,init,ntrans, nInitVal)
   }
 
 
@@ -472,7 +475,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans) extends Automata {
     for ((from,(to,p,g,u,es)) <- trans)
       ntrans += ((from,(to,p,g,u.instance,es)))
 
-    HubAutomata(ports,init,ntrans)
+    HubAutomata(ports,init,ntrans,initVal)
   }
 
   def wherePortsAre: Map[(Int,Prim),(Guard,Boolean,Int)] = {
@@ -540,6 +543,7 @@ object HubAutomata {
   // from -> (target, ports, guards, update, originalEdge)
   type Trans = Set[(Int,(Int,Set[Int],Guard, Update,Set[Prim]))]
 
+  type Valuation = Map[Var,Expr]
 
 //  def mkVar(start:String, ports:List[Int]):String = ports.mkString(start,"_","")
 
@@ -555,47 +559,53 @@ object HubAutomata {
       */
     def buildAutomata(e: Prim, seed: Int): (HubAutomata, Int) = e match {
       case Prim(CPrim("sync",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
       case Prim(CPrim("id",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
       case Prim(CPrim("port",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
       case Prim(CPrim("lossy",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))
-                                         ,seed -> (seed, Set(a)   , Ltrue, Noop                    , Set(e)))), seed + 1)
+                                         ,seed -> (seed, Set(a)   , Ltrue, Noop                    , Set(e))),Map()), seed + 1)
       case Prim(CPrim("event",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
+        (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)),
+                                              seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e))),Map()), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
       case Prim(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1
           , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
+          , Map(Var("bf")->Val(0)))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
       case Prim(CPrim("fifo",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed - 1,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
+          , Map(Var("bf")->Val(0)))
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
       case Prim(CPrim("drain",_,_,_), List(a, b), List(), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, Noop, Set(e)))), seed + 1)
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, Noop, Set(e))),Map()), seed + 1)
       case Prim(CPrim("merger",_,_,_), List(a, b), List(c), _) =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, c), Ltrue, c.toString := a.toString, Set(e)),
-            seed -> (seed, Set(b, c), Ltrue, c.toString := b.toString, Set(e))))
+            seed -> (seed, Set(b, c), Ltrue, c.toString := b.toString, Set(e)))
+          , Map())
           , seed + 1)
       case Prim(CPrim("dupl",_,_,_), List(a), List(b, c), _) =>
         (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e))))
+          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e)))
+          , Map())
           , seed + 1)
       case Prim(CPrim("xor",_,_,_), List(a), List(b, c), _) =>
         (HubAutomata(Set(a, b, c), seed
           , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
-            ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e))))
+            ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e)))
+          , Map())
           , seed + 1)
 //      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
 //        (HubAutomata(Set(a, b, c), seed
@@ -609,19 +619,22 @@ object HubAutomata {
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i) yield
-            seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e)))
+            seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e))
+          , Map())
           , seed + 1)
       case Prim(CPrim("node",_,_,extra), ins, outs, _) =>
         val i = ins.toSet
         val o = outs.toSet
         (HubAutomata(i ++ o, seed
           , for (xi <- i; xo <- o) yield
-            seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e)))
+            seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e))
+          , Map())
           , seed + 1)
       case Prim(CPrim("resource",_,_,_), List(a,b), List(), _) =>
         (HubAutomata(Set(a,b), seed - 1
           , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
-          ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e))))
+          ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e)))
+          , Map(Var("bf")->Val(0)))
           , seed +2)
       case Prim(CPrim("blackboard",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a,b), seed -1
@@ -629,32 +642,35 @@ object HubAutomata {
             , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
             , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
             , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
-            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e)))
+          , Map(Var("bf")->Val(0),Var("u")->Val(0)))
           , seed + 2)
       case Prim(CPrim("semaphore",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b)
           , seed
           , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
-            seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e))))
+                seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e)))
+          , Map(Var("c")->Val(0)))
           , seed + 1)
           case Prim(CPrim("writer", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e)))), seed + 1)
+            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e))),Map()), seed + 1)
           case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e)))), seed + 1)
+            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e))),Map()), seed + 1)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), seed, Set()), seed + 1)
+            (HubAutomata(Set(a), seed, Set(),Map()), seed + 1)
           case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), seed, Set()), seed + 1)
+            (HubAutomata(Set(a), seed, Set(),Map()), seed + 1)
 
         /////// FULL //////
       case Prim(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)), seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e)))), seed + 2)
+        (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e))
+                                    , seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e))),Map()), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
       case Prim(CPrim("dataEventFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), seed
           , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
             seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))),Map(Var("bf")->Val(0)))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
       case Prim(CPrim("fifofull",x,y,z), a, b, c) =>
@@ -663,7 +679,8 @@ object HubAutomata {
         (HubAutomata(Set(a, b), seed,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))))
+            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
+          , Map(Var("bf")->Val(0)))
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
@@ -673,24 +690,42 @@ object HubAutomata {
             , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
             , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
             , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
-            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e)))
+          , Map(Var("bf")->Val(0),Var("u")->Val(0)))
           , seed + 2)
+      case Prim(CPrim("semaphoreFull",_,_,_), List(a), List(b), _) =>
+        (HubAutomata(Set(a, b)
+          , seed
+          , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
+            seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e)))
+          , Map(Var("c")->Val(1)))
+          , seed + 1)
 
 
-      case Prim(p, List(_), List(_), _) =>
+      case Prim(CPrim("timer", _, _, _), List(_), List(_), _) =>
         throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
 
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e)))), seed + 1)
+        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))), Map()), seed + 1)
 
 
       case Prim(p, _, _, _) =>
-        throw new RuntimeException(s"Unknown hub automata for primitive $p")
+        throw new GenerationException(s"Primitive connector ${p.name} not modelled as Hub Automata.")
 
     }
 
-    def emptyAutomata = HubAutomata(Set(), 0, Set())
+    def emptyAutomata = HubAutomata(Set(), 0, Set(), Map())
+
+    /**
+      * Automata composition - combining every possible transition,
+      * and including transitions that can occur in parallel.
+      *
+      * @param a1   automata to be composed
+      * @param a2   automata to be composed
+      * @return composed automata
+      */
+    def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 20000)
 
     /**
       * Automata composition - combining every possible transition,
@@ -701,8 +736,6 @@ object HubAutomata {
       * @param hide whether to hide internal actions while composing
       * @return composed automata
       */
-    def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 20000)
-
     def join(a1: HubAutomata, a2: HubAutomata, hide: Boolean, timeout: Int): HubAutomata = {
       //println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}")
       //println(s"combining ${a1.show}\nwith ${a2.show}")
@@ -824,7 +857,7 @@ object HubAutomata {
       }
       //            (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
       // println(s"ports: $newStates")
-      val res1 = HubAutomata(newPorts, mkState(a1.init, a2.init), restrans)
+      val res1 = HubAutomata(newPorts, mkState(a1.init, a2.init), restrans, a1.initVal ++ a2.initVal)
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
 //      println(res2.show)
