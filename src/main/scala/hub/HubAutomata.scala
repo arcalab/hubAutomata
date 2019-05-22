@@ -80,7 +80,8 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
           else
             es.map(getName(_, fire)).foldRight[Set[String]](Set())(cleanDir).mkString(".")
           }
-        + s"~${Show(Simplify(if (fullName) renamePortsInUpd(upd) else upd))}"
+        + s"~${Show(Simplify(if (fullName) renamePortsInUpd(upd) else upd))}" +
+          "§" + fire.mkString("§")
         , (g, fire, upd,es).hashCode().toString
         , to)
   }
