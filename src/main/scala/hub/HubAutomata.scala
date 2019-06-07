@@ -332,7 +332,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     * @return automata without intermediate nor unused variables
     */
   def simplify: HubAutomata = {
-    println(this)
+
     // all variables produced in transitions of the hub
     val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
     // all variables dependencies in transitions of the hub
@@ -354,7 +354,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     //first remove assignements that depend only on nonAsgVars
     var simplifiedTrans:Trans = this.trans
     while (nonAsgVars.nonEmpty) {
-      println(s"nonAsigned vars: ${nonAsgVars}")
+//      println(s"nonAsigned vars: ${nonAsgVars}")
       simplifiedTrans = rmDepNotAsg(nonAsgVars,simplifiedTrans)
       var nProd = simplifiedTrans.flatMap(t => t._2._4.prod)
       var nDep = simplifiedTrans.flatMap(t => t._2._4.dep) //.filterNot(v => v.name.matches("[A-Z]*")) //++ t._2._3.vars)
