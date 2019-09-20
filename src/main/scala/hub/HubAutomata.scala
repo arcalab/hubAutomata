@@ -1,21 +1,17 @@
 package hub
 
-import hub.HubAutomata.{Trans,Valuation}
+import hub.HubAutomata.{Trans, Valuation}
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import hub.common.GenerationException
+
+import ifta._
+
 import preo.ast.CPrim
 import preo.backend.Network.Prim
 import preo.backend.{Automata, AutomataBuilder, PortAutomata}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
-
-
-//case class Edge(prim: String, ins:List[Int], outs:List[Int], parents:List[String])
-//case class ReoGraph(edges:List[Edge], ins:List[Int], outs:List[Int]) {
-//  def ++(other:ReoGraph) = ReoGraph(edges++other.edges,ins++other.ins,outs++other.outs)
-//}
 
 
 /**
@@ -26,7 +22,7 @@ import scala.collection.mutable
   * @param trans Transitions - Relation between input and output states, with associated
   *              sets of actions and of edges (as in [[Prim]]).
   */
-case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) extends Automata {
+case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:Set[String],inv:Map[Int,ClockCons],initVal:Valuation) extends Automata {
 
   private var inSeed = 0
   private var outSeed = 0
@@ -37,72 +33,60 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
 
 
   /** Collects all states, seen as integers */
-  def getStates: Set[Int] = (for((x,(y,_,_,_,_)) <- trans) yield Set(x,y)).flatten + init
+  def getStates: Set[Int] = (for((x,(y,_,_,_,_,_,_)) <- trans) yield Set(x,y)).flatten + init
   // states: ints, transitions: maps from states to (new state,ports fired, primitives involved)
 
   /** Returns the initial state */
   def getInit: Int = init
 
-
-  /** Returns the transitions to be displayed */
-//  override def getTrans(fullName:Boolean = false): Set[(Int, Any,String,Int)] = {
-//    for ((from, (to, fire, g, upd, es)) <- trans) {
-//      println(s"Transition with ports: ${fire}")
-//      println("reo edges associated: ")
-//      es.map(e => println(s" $e \n  - primname: ${e.prim.name}  ins: ${e.ins}; outs: ${e.outs}"))
-//    }
-//    for ((from, (to, fire, g, upd, es)) <- trans)
-//      yield (
-//        from
-//        , s"${Show(Simplify(if(fullName) mkPortInGuard(g) else g))}~"
-//          + s"${if (fullName)
-//              cleanFullNameDir(es.flatMap(getFullName(_, fire))).mkString(".")
-//            else
-//              es.map(getName(_, fire)).foldRight[Set[String]](Set())(cleanDir).mkString(".")}"
-//          + s"~${Show(Simplify(if (fullName) mkPortInUpd(upd) else upd))}"
-//        , (g, fire, upd,es).hashCode().toString
-//        , to)
-//  }
-
-  /** Returns the transitions to be displayed */
-  // New name for transition actions, and associated variables
-  // idea:
-  // - if action belongs to a predefine hub (e.g., node, port, sem, etc.) -> then use custom name inX or outX
-  // - if action belong to a user name (e.g. put1, get, etc.) - then use the name of the connector to which the action belongs
+  /**
+    * Returns the transitions to be displayed
+    * New name for transition actions, and associated variables
+    * - if action belongs to a predefine hub (e.g., node, port, sem, etc.)
+    *   -> then use custom name inX or outX
+    * - if action belong to a user name (e.g. put1, get, etc.)
+    *   -> then use the name of the connector to which the action belongs
+    *
+    * @param fullName
+    * @return
+    */
   override def getTrans(fullName:Boolean = false): Set[(Int,Any,String,Int)] = {
-    for ((from, (to, fire, g, upd, es)) <- trans)
+    for ((from, (to, fire, g,cc, cr, upd, es)) <- trans)
       yield (
         from
         , s"${Show(Simplify(if(fullName) renamePortsInGuard(g) else g))}~"
+        + (ifta.analyse.Simplify(cc) match {
+            case CTrue => ""
+            case const => ifta.backend.Show(const)}) + "~"
         + {if (fullName)
-//        cleanFullNameDir(es.flatMap(getFullName(_, fire))).mkString(".")
             fire.map(p => getPortName(p)+portDir(p)).mkString(".")
           else
             es.map(getName(_, fire)).foldRight[Set[String]](Set())(cleanDir).mkString(".")
           }
-        + s"~${Show(Simplify(if (fullName) renamePortsInUpd(upd) else upd))}" +
+        + s"~${Show(Simplify(if (fullName) renamePortsInUpd(upd) else upd))}~"
+        + s"${cr.map(c => s"$c := 0").mkString(",")}~" +
           "§" + fire.mkString("§")
-        , (g, fire, upd,es).hashCode().toString
+        , (g, cc,fire,upd,cr,es).hashCode().toString
         , to)
   }
 
   /* Return the set of input ports */
-  def getInputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten intersect ports
+  def getInputs: Set[Int] = (for((_,(_,_,_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten intersect ports
 
   /* Return the set of output ports */
-  def getOutputs: Set[Int] = (for((_,(_,_,_,_,edges)) <- trans) yield edges.flatMap(_.outs)).flatten intersect ports
+  def getOutputs: Set[Int] = (for((_,(_,_,_,_,_,_,edges)) <- trans) yield edges.flatMap(_.outs)).flatten intersect ports
 
   /* Return the set of internal variable names */
   def getInternalVarsNames: Set[String] =
-    (for((_,(_,_,g,u,_)) <- trans) yield g.vars ++ u.vars).flatten.map(_.name) --
+    (for((_,(_,_,g,_,_,u,_)) <- trans) yield g.vars ++ u.vars).flatten.map(_.name) --
       (getInputs ++ getOutputs).map(_.toString)
 
   /* Return the set of all variables */
-  def getVars:Set[Var] = (for((_,(_,_,g,u,_)) <- trans) yield g.vars ++ u.vars).flatten
+  def getVars:Set[Var] = (for((_,(_,_,g,_,_,u,_)) <- trans) yield g.vars ++ u.vars).flatten
 
   def getInternalVars:Set[Var] = {
     val globalVars: Set[String] = (this.getOutputs ++ this.getInputs).map(_.toString)
-    (for ((_, (_, _, g, u, _)) <- trans) yield g.vars ++ u.vars).flatten.filterNot(v => globalVars.contains(v.name))
+    (for ((_, (_, _, g,_ , _,u, _)) <- trans) yield g.vars ++ u.vars).flatten.filterNot(v => globalVars.contains(v.name))
   }
 
   // number of states, a list of (varTypeName, sizeOfvarTypeName in number of bytes)
@@ -141,7 +125,7 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     var t = trans.find(t => t._2._2.contains(p)) //get a transition with p
     if (t.nonEmpty) {
       // get the reo edge to which p belongs (there is only one because it is an in or out)
-      var e = t.get._2._5.find(e => (e.outs ++ e.ins).contains(p))
+      var e = t.get._2._7.find(e => (e.outs ++ e.ins).contains(p))
 
       if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
         name = getPortIndexedName(p)
@@ -183,44 +167,6 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     else if (getOutputs.contains(p))
       "↑"
     else ""
-
-//  private def mkPortName(p:Int, edges:Set[Edge]):String = {
-//    val e = edges.find(e => (e.ins++e.outs).contains(p))
-//    var name = ""
-//    if (VirtuosoParser.PRIMITIVE.contains(e.get.prim.name))
-//      name = getPortIndexedName(p)
-//    else
-//      name = e.get.prim.name
-//    portName += (p -> name)
-//    name
-//  }
-
-//  private def getFullName(edge:Edge,fire:Set[Int]): Set[String] = {
-//    fire.map(p =>
-//      if (edge.ins.contains(p) || edge.outs.contains(p))
-//        getPortIndexedName(p) + getFullNameDir(edge,p) else "")
-//  }
-//
-//  private def getFullNameDir(edge:Edge, p:Int):String = {
-//    if (edge.ins.contains(p))
-//      "↓"
-//    else if (edge.outs.contains(p))
-//      "↑"
-//    else ""
-//  }
-//
-//  private def cleanFullNameDir(fire:Set[String]):Set[String] ={
-//    var groupByName:Map[String,Set[String]] = fire.groupBy(s => if (s.nonEmpty) s.init else s )
-//
-//    def clean(p:String, occurences:Set[String]):String =
-//      if (occurences.size >1) p+"↕" else occurences.head
-//
-//    groupByName.map(p => clean(p._1,p._2)).toSet
-//  }
-
-//  private def getUpdName(u:Update):Update = u match {
-//    case Asg(x, e) =>
-//  }
 
   /**
     * Rename variables that belong to ports in expresions
@@ -285,12 +231,6 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
       }
     }
 
-//  private def primName(prim: CPrim): String = (prim.name,prim.extra) match {
-//    case ("writer",Some(s:String)) => s"wr($s)"
-//    case ("reader",Some(s:String)) => s"rd($s)"
-//    case (n,Some(s:String)) => s"$n($s)"
-//    case (n,_) => n
-//  }
   private def cleanDir(s:String,rest:Set[String]): Set[String] =
   if (s.nonEmpty) {
     (s.init, s.last) match {
@@ -314,16 +254,19 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     var missing = Set(init)
     var done = Set[Int]()
     var ntrans: Trans = Set()
+    var nsts:Set[Int] = Set(init)
     while (missing.nonEmpty) {
       val next = missing.head
       missing = missing.tail
       done += next
-      for (t@(from, (to,_,_,_, _)) <- trans if from == next) {
+      for (t@(from, (to,_,_,_,_,_, _)) <- trans if from == next) {
         ntrans += t
+        nsts += to
         if (!(done contains to)) missing += to
       }
     }
-    HubAutomata(ports, init, ntrans, initVal)
+    var nInv = inv.filter(i => nsts.contains(i._1))
+    HubAutomata(ports, nsts, init, ntrans, clocks,nInv, initVal)
   }
 
   // TODO: maybe move these methods to Simplify?
@@ -334,11 +277,11 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
   def simplify: HubAutomata = {
 
     // all variables produced in transitions of the hub
-    val allProd: Set[Var] = this.trans.flatMap(t => t._2._4.prod)
+    val allProd: Set[Var] = this.trans.flatMap(t => t._2._6.prod)
     // all variables dependencies in transitions of the hub
-    var allDep: Set[Var] = this.trans.flatMap(t => t._2._4.dep ++ t._2._3.vars)
+    var allDep: Set[Var] = this.trans.flatMap(t => t._2._6.dep ++ t._2._3.vars)
     // variable dependencies in transitions only based on assignments and exclude uppercase vars (assume they are constants)
-    var allDepAsg: Set[Var] = this.trans.flatMap(t => t._2._4.dep)//.filterNot(v => v.name.matches("[A-Z]*"))
+    var allDepAsg: Set[Var] = this.trans.flatMap(t => t._2._6.dep)//.filterNot(v => v.name.matches("[A-Z]*"))
 
     var internalVars:Set[Var] = this.getInternalVars
     // assigned variables that are never used
@@ -356,30 +299,30 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     while (nonAsgVars.nonEmpty) {
 //      println(s"nonAsigned vars: ${nonAsgVars}")
       simplifiedTrans = rmDepNotAsg(nonAsgVars,simplifiedTrans)
-      var nProd = simplifiedTrans.flatMap(t => t._2._4.prod)
-      var nDep = simplifiedTrans.flatMap(t => t._2._4.dep) //.filterNot(v => v.name.matches("[A-Z]*")) //++ t._2._3.vars)
+      var nProd = simplifiedTrans.flatMap(t => t._2._6.prod)
+      var nDep = simplifiedTrans.flatMap(t => t._2._6.dep) //.filterNot(v => v.name.matches("[A-Z]*")) //++ t._2._3.vars)
       nonAsgVars = (nDep -- nProd).intersect(internalVars)
     }
 
     // get all intermediate variables
-    for (t@(from, (to, p, g, u, es)) <- simplifiedTrans) {
+    for (t@(from, (to, p, g,cc,cr, u, es)) <- simplifiedTrans) {
       var intermediateOfU =  getIntermediateUpd(u,Set())
       intermediateVars ++=  intermediateOfU -- areDependencies
       areDependencies ++= u.dep -- intermediateOfU
     }
 
     var ntrans: Trans = Set()
-    for (t@(from,(to,p,g,u,es)) <- simplifiedTrans) {
+    for (t@(from,(to,p,g,cc,cr,u,es)) <- simplifiedTrans) {
       // remove unused variables of u
       var cleanUpd = if (u.vars.intersect(unusedVars).isEmpty) u else rmUnusedUpd(u,unusedVars)
       // remove intermediate variables of u
       cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
-      ntrans += ((from,(to,p,g,Simplify(cleanUpd),es)))
+      ntrans += ((from,(to,p,g,cc,cr,Simplify(cleanUpd),es)))
     }
 
     val nInitVal = initVal -- unusedVars
 
-    HubAutomata(ports,init,ntrans, nInitVal)
+    HubAutomata(ports,sts,init,ntrans,clocks,inv, nInitVal)
   }
 
 
@@ -390,8 +333,8 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
     */
   private def rmDepNotAsg(nonAsg:Set[Var],t:Trans):Trans  = {
     var ntrans:Trans = Set()
-    for (t@(from,(to,p,g,u,es)) <- t) {
-      ntrans += ((from,(to,p,g,rmNotAsgUpd(u,nonAsg),es)))
+    for (t@(from,(to,p,g,cc,cr,u,es)) <- t) {
+      ntrans += ((from,(to,p,g,cc,cr,rmNotAsgUpd(u,nonAsg),es)))
     }
     ntrans
   }
@@ -473,17 +416,18 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
 
   def serialize: HubAutomata = {
     var ntrans:Trans = Set()
-    for ((from,(to,p,g,u,es)) <- trans)
-      ntrans += ((from,(to,p,g,u.instance,es)))
+    for ((from,(to,p,g,cc,cr,u,es)) <- trans)
+      ntrans += ((from,(to,p,g,cc,cr,u.instance,es)))
 
-    HubAutomata(ports,init,ntrans,initVal)
+    HubAutomata(ports,sts,init,ntrans,clocks,inv,initVal)
   }
 
+  // todo: check if it needs update after incorporating clock constraints
   def wherePortsAre: Map[(Int,Prim),(Guard,Boolean,Int)] = {
     // SHOULD map each port/edge to: (source state to: condition to fire + canBeSingle)
     // in the end flatten conditions (with AND) and canBeSingle (with AND) and number of ports of source
     val res = mutable.Map[(Int,Prim),Map[Int,(Guard,Boolean)]]()
-    for ((from,(to,ps,g,u,es)) <- trans) {
+    for ((from,(to,ps,g,cc,cr,u,es)) <- trans) {
       val canBeSingle = ps.size == 1 // only 1 ports
       //println(s"--- can be single? [${ps.mkString(",")}] - $canBeSingle")
       for (e <- es) { // for all edges in some transitions
@@ -512,11 +456,11 @@ case class HubAutomata(ports:Set[Int],init:Int,trans:Trans,initVal:Valuation) ex
   def show: String =
     s"$init - ${ports.mkString(",")}:\n"+trans.map(x=>s" - ${x._1}->${x._2._1} "+
       s"${x._2._2.toList.sorted.mkString("[",",","]")} "+
-      s"${x._2._5.toList.map(x=>x.prim.name + (x.ins++x.outs).mkString("{",",","}")).sorted.mkString("(",",",")")}").mkString("\n")
+      s"${x._2._7.toList.map(x=>x.prim.name + (x.ins++x.outs).mkString("{",",","}")).sorted.mkString("(",",",")")}").mkString("\n")
 
   def smallShow: String = {
     //trans.flatMap(_._2._5).toList.map(_.toString).sorted.mkString("Aut(",",",")")
-    trans.flatMap(_._2._5).toList.map(p => s"${p.prim.name}${if(p.prim.extra.nonEmpty) "/"+p.prim.extra.mkString("/") else ""}" ).sorted.mkString("Aut(",",",")")
+    trans.flatMap(_._2._7).toList.map(p => s"${p.prim.name}${if(p.prim.extra.nonEmpty) "/"+p.prim.extra.mkString("/") else ""}" ).sorted.mkString("Aut(",",",")")
   }
 
 }
@@ -538,11 +482,12 @@ object HubAutomata {
     , "xors"
     , "mrg"
     , "drain"
+    , "timer"
   )
 
 
-  // from -> (target, ports, guards, update, originalEdge)
-  type Trans = Set[(Int,(Int,Set[Int],Guard, Update,Set[Prim]))]
+  // from -> (target, ports, guards, clock constraints, clock resets, update, originalEdge)
+  type Trans = Set[(Int,(Int,Set[Int],Guard,ClockCons,Set[String],Update,Set[Prim]))]
 
   type Valuation = Map[Var,Expr]
 
@@ -560,53 +505,54 @@ object HubAutomata {
       */
     def buildAutomata(e: Prim, seed: Int): (HubAutomata, Int) = e match {
       case Prim(CPrim("sync",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
+        (HubAutomata(Set(a, b),Set(seed), seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue, Set(), b.toString := a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
       case Prim(CPrim("id",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
+        (HubAutomata(Set(a, b),Set(seed), seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
       case Prim(CPrim("port",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))),Map()), seed + 1)
+        (HubAutomata(Set(a, b),Set(seed), seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
       case Prim(CPrim("lossy",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))
-                                         ,seed -> (seed, Set(a)   , Ltrue, Noop                    , Set(e))),Map()), seed + 1)
+        (HubAutomata(Set(a, b), Set(seed), seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))
+                                         , seed -> (seed, Set(a) , Ltrue, CTrue,Set(), Noop, Set(e))),Set(),Map(),Map()), seed + 1)
       case Prim(CPrim("event",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e)),
-                                              seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e))),Map()), seed + 2)
+        (HubAutomata(Set(a, b),Set(seed,seed-1), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue,Set(), Noop, Set(e)),
+                                              seed -> (seed - 1, Set(b), Ltrue, CTrue, Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
       case Prim(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed - 1
-          , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1
+          , Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue,Set(), "bf" := a.toString, Set(e)),
+            seed -> (seed, Set(a), Ltrue, CTrue, Set(),"bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, CTrue,Set(), b.toString := "bf", Set(e)))
+          , Set(),Map()
           , Map(Var("bf")->Val(0)))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
       case Prim(CPrim("fifo",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed - 1,
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
-          Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
-          , Map(Var("bf")->Val(0)))
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set(),"bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, CTrue,Set(), b.toString := "bf", Set(e)))
+          , Set(),Map(),Map(Var("bf")->Val(0)))
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
       case Prim(CPrim("drain",_,_,_), List(a, b), List(), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, Noop, Set(e))),Map()), seed + 1)
+        (HubAutomata(Set(a, b),Set(seed), seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), Noop, Set(e))),Set(),Map(),Map()), seed + 1)
       case Prim(CPrim("merger",_,_,_), List(a, b), List(c), _) =>
-        (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, c), Ltrue, c.toString := a.toString, Set(e)),
-            seed -> (seed, Set(b, c), Ltrue, c.toString := b.toString, Set(e)))
-          , Map())
+        (HubAutomata(Set(a, b, c), Set(seed),seed
+          , Set(seed -> (seed, Set(a, c), Ltrue, CTrue,Set(), c.toString := a.toString, Set(e)),
+            seed -> (seed, Set(b, c), Ltrue, CTrue, Set(),c.toString := b.toString, Set(e)))
+          , Set(),Map(),Map())
           , seed + 1)
       case Prim(CPrim("dupl",_,_,_), List(a), List(b, c), _) =>
-        (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, b, c), Ltrue, (b.toString := a.toString) & (c.toString := a.toString), Set(e)))
-          , Map())
+        (HubAutomata(Set(a, b, c),Set(seed), seed
+          , Set(seed -> (seed, Set(a, b, c), Ltrue, CTrue, Set(),(b.toString := a.toString) & (c.toString := a.toString), Set(e)))
+          , Set(),Map(),Map())
           , seed + 1)
       case Prim(CPrim("xor",_,_,_), List(a), List(b, c), _) =>
-        (HubAutomata(Set(a, b, c), seed
-          , Set(seed -> (seed, Set(a, b), Ltrue, (b.toString := a.toString) , Set(e))
-            ,   seed -> (seed, Set(a,c), Ltrue, (c.toString := a.toString), Set(e)))
-          , Map())
+        (HubAutomata(Set(a, b, c),Set(seed), seed
+          , Set(seed -> (seed, Set(a, b), Ltrue, CTrue, Set(),(b.toString := a.toString) , Set(e))
+            ,   seed -> (seed, Set(a,c), Ltrue, CTrue,Set(), (c.toString := a.toString), Set(e)))
+          , Set(),Map(),Map())
           , seed + 1)
 //      case Edge(CPrim("node",_,_,extra), List(a), List(b, c), _) if extra contains("dupl") =>
 //        (HubAutomata(Set(a, b, c), seed
@@ -618,97 +564,111 @@ object HubAutomata {
       case Prim(CPrim("node",_,_,extra), ins, outs, _) if extra contains("dupl") =>
         val i = ins.toSet
         val o = outs.toSet
-        (HubAutomata(i ++ o, seed
+        (HubAutomata(i ++ o, Set(seed),seed
           , for (xi <- i) yield
-            seed -> (seed, o+xi, Ltrue, (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e))
-          , Map())
+            seed -> (seed, o+xi, Ltrue, CTrue, Set[String](), (for (xo <- o) yield xo.toString := xi.toString).fold[Update](Noop)(_ & _) , Set(e))
+          , Set(),Map(),Map())
           , seed + 1)
       case Prim(CPrim("node",_,_,extra), ins, outs, _) =>
         val i = ins.toSet
         val o = outs.toSet
-        (HubAutomata(i ++ o, seed
+        (HubAutomata(i ++ o, Set(seed),seed
           , for (xi <- i; xo <- o) yield
-            seed -> (seed, Set(xi,xo), Ltrue,  xo.toString := xi.toString , Set(e))
-          , Map())
+            seed -> (seed, Set(xi,xo), Ltrue, CTrue, Set[String](), xo.toString := xi.toString , Set(e))
+          , Set(),Map(),Map())
           , seed + 1)
       case Prim(CPrim("resource",_,_,_), List(a,b), List(), _) =>
-        (HubAutomata(Set(a,b), seed - 1
-          , Set(seed - 1  -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e))
-          ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)),Noop, Set(e)))
-          , Map(Var("bf")->Val(0)))
+        (HubAutomata(Set(a,b), Set(seed,seed-1),seed - 1
+          , Set(seed - 1  -> (seed, Set(a), Ltrue, CTrue, Set(), "bf" := a.toString, Set(e))
+          ,     seed -> (seed -1, Set(b), Pred("=", List("bf", b.toString)), CTrue,Set(),Noop, Set(e)))
+          , Set(),Map(),Map(Var("bf")->Val(0)))
           , seed +2)
       case Prim(CPrim("blackboard",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a,b), seed -1
-          , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
-            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
-            , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
-            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
-            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e)))
-          , Map(Var("bf")->Val(0),Var("u")->Val(0)))
+        (HubAutomata(Set(a,b),Set(seed,seed-1), seed -1
+          , Set(seed -1 -> (seed, Set(a), Ltrue, CTrue, Set(),("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
+            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), CTrue, Set(),("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
+            , seed -> (seed, Set(b), Ltrue, CTrue, Set(),b.toString := Fun("join",List("bf", "u")),Set(e))
+            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), CTrue,Set(), Noop, Set(e))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), CTrue,Set(), Noop, Set(e)))
+          , Set(),Map(),Map(Var("bf")->Val(0),Var("u")->Val(0)))
           , seed + 2)
       case Prim(CPrim("semaphore",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b)
-          , seed
-          , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
-                seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e)))
-          , Map(Var("c")->Val(0)))
+          , Set(seed),seed
+          , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), CTrue,Set(), "c" := Fun("+", List("c", Val(1))), Set(e)),
+                seed -> (seed, Set(b), Pred(">", List("c", Val(1))), CTrue, Set(),"c" := Fun("-", List("c", Val(1))), Set(e)))
+          , Set(),Map(),Map(Var("c")->Val(0)))
           , seed + 1)
           case Prim(CPrim("writer", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a),Ltrue,Noop, Set(e))),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), seed, Set(seed -> (seed, Set(a), Ltrue,Noop, Set(e))),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed),seed, Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), seed, Set(),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), seed, Set(),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
 
         /////// FULL //////
       case Prim(CPrim("eventFull",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, Noop, Set(e))
-                                    , seed -> (seed - 1, Set(b), Ltrue, Noop, Set(e))),Map()), seed + 2)
+        (HubAutomata(Set(a, b),Set(seed,seed-1), seed, Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue,Set(), Noop, Set(e))
+                                    , seed -> (seed - 1, Set(b), Ltrue, CTrue, Set(),Noop, Set(e))), Set(),Map(),Map()), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
       case Prim(CPrim("dataEventFull",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed
-          , Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e))),Map(Var("bf")->Val(0)))
+        (HubAutomata(Set(a, b),Set(seed,seed-1), seed
+          , Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set(),"bf" := a.toString, Set(e)),
+            seed -> (seed, Set(a), Ltrue, CTrue,Set(), "bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, CTrue,Set(), b.toString := "bf", Set(e))),Set(),Map(),Map(Var("bf")->Val(0)))
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
       case Prim(CPrim("fifofull",x,y,z), a, b, c) =>
         buildAutomata(Prim(CPrim("fifofull",x,y,z), a, b, c),seed)
       case Prim(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed,
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
-          Set(seed - 1 -> (seed, Set(a), Ltrue, "bf" := a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, b.toString := "bf", Set(e)))
-          , Map(Var("bf")->Val(0)))
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set(),"bf" := a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, CTrue,Set(), b.toString := "bf", Set(e)))
+          , Set(),Map(),Map(Var("bf")->Val(0)))
           , seed + 2)
       //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
       //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
       case Prim(CPrim("blackboardFull",_,_,_), List(a), List(b), _) =>
-        (HubAutomata(Set(a,b), seed
-          , Set(seed -1 -> (seed, Set(a), Ltrue, ("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
-            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), ("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
-            , seed -> (seed, Set(b), Ltrue, b.toString := Fun("join",List("bf", "u")),Set(e))
-            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e))
-            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), Noop, Set(e)))
-          , Map(Var("bf")->Val(0),Var("u")->Val(0)))
+        (HubAutomata(Set(a,b), Set(seed,seed-1), seed
+          , Set(seed -1 -> (seed, Set(a), Ltrue, CTrue, Set(),("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
+            , seed -> (seed, Set(a), Pred("!=", List(a.toString, "CLR")), CTrue, Set(),("bf" := a.toString) & ("u" := Fun("mod",List(Fun("+",List("u",Val(1))),"MAXINT"))), Set(e))
+            , seed -> (seed, Set(b), Ltrue, CTrue,Set(), b.toString := Fun("join",List("bf", "u")),Set(e))
+            , seed -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), CTrue, Set(),Noop, Set(e))
+            , seed-1 -> (seed -1, Set(a), Pred("=", List(a.toString, "CLR")), CTrue,Set(), Noop, Set(e)))
+          , Set(),Map(),Map(Var("bf")->Val(0),Var("u")->Val(0)))
           , seed + 2)
       case Prim(CPrim("semaphoreFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b)
-          , seed
-          , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), "c" := Fun("+", List("c", Val(1))), Set(e)),
-            seed -> (seed, Set(b), Pred(">", List("c", Val(1))), "c" := Fun("-", List("c", Val(1))), Set(e)))
-          , Map(Var("c")->Val(1)))
+          , Set(seed),seed
+          , Set(seed -> (seed, Set(a), Pred("<", List("c", "MAXINT")), CTrue,Set(), "c" := Fun("+", List("c", Val(1))), Set(e)),
+            seed -> (seed, Set(b), Pred(">", List("c", Val(1))), CTrue, Set(),"c" := Fun("-", List("c", Val(1))), Set(e)))
+          , Set(),Map(),Map(Var("c")->Val(1)))
           , seed + 1)
 
 
-      case Prim(CPrim("timer", _, _, _), List(_), List(_), _) =>
-        throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
+//      case Prim(CPrim("timer", _, _, _), List(_), List(_), _) =>
+//        throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
+      case Prim(CPrim("timer", _, _, extra), List(a), List(b),_) =>
+        //          var info = extra.iterator.filter(e => e.isInstanceOf[(String,Int)]).map(e => e.asInstanceOf[(String,Int)])
+        //          var to = info.toMap.getOrElse("to",0)
+        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0
+        }
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
+          //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("c"), Noop, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, ET("c",to),Set(), Noop, Set(e)))
+          , Set("c"),Map(seed->LE("c",to)),Map())
+          , seed + 2)
 
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
-        (HubAutomata(Set(a, b), seed, Set(seed -> (seed, Set(a, b), Ltrue, b.toString := a.toString, Set(e))), Map()), seed + 1)
+        (HubAutomata(Set(a, b), Set(seed),seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(), Map()), seed + 1)
 
 
       case Prim(p, _, _, _) =>
@@ -716,7 +676,7 @@ object HubAutomata {
 
     }
 
-    def emptyAutomata = HubAutomata(Set(), 0, Set(), Map())
+    def emptyAutomata = HubAutomata(Set(),Set(0), 0, Set(), Set(),Map(),Map())
 
     /**
       * Automata composition - combining every possible transition,
@@ -744,9 +704,13 @@ object HubAutomata {
       var seed = 0
       var steps = timeout
       val shared = a1.ports.intersect(a2.ports)
-      var restrans = Set[(Int, (Int, Set[Int], Guard, Update, Set[Prim]))]()
+      //var restrans = Set[(Int, (Int, Set[Int], Guard, Update, Set[Prim]))]()
+      var restrans:Trans = Set()
       var newStates = Map[(Int, Int), Int]()
-
+      // if they share clocks, rename them to avoid conflicts
+      var sharedClocks = a1.clocks intersect a2.clocks
+      var newClocks: Map[(String,Int),String] = Map()
+      var clockSeed = 0
       // println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")
 
       def mkState(i1: Int, i2: Int) = if (newStates.contains((i1, i2)))
@@ -835,30 +799,69 @@ object HubAutomata {
         if (hide) edges.filter(e => e.ins.exists(newPorts) || e.outs.exists(newPorts))
         else edges
 
+      /** create new names for shared clock names */
+      def getClockName(c:String,aut:Int):String = {
+        if (sharedClocks contains c)
+          if (newClocks.contains(c,aut))
+            newClocks((c,aut))
+          else {
+            clockSeed += 1
+            newClocks += ((c,aut) -> s"$c$clockSeed")
+            c + s"$clockSeed"
+          }
+        else c
+      }
+
+      /** rename clocks in clock constraints */
+      def renameClocks(cc:ClockCons,aut:Int):ClockCons = cc match {
+        case CTrue => CTrue
+        case CAnd(cc1,cc2) => CAnd(renameClocks(cc1,aut),renameClocks(cc2,aut))
+        case ET(c,n) => ET(getClockName(c,aut),n)
+        case GT(c,n) => GT(getClockName(c,aut),n)
+        case GE(c,n) => GE(getClockName(c,aut),n)
+        case LE(c,n) => LE(getClockName(c,aut),n)
+        case LT(c,n) => LT(getClockName(c,aut),n)
+      }
+
       // just 1
-      for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
+      for ((from1, (to1, fire1, g1, cc1,cr1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
         if (ok(fire1))
-          restrans += mkState(from1, p2) -> (mkState(to1, p2), fire1, mkGuard(g1,1), remapUpd(u1,1), es1)
+          restrans += mkState(from1, p2) -> (mkState(to1, p2), fire1, mkGuard(g1,1), renameClocks(cc1,1), cr1.map(c=>getClockName(c,1)), remapUpd(u1,1), es1)
       // just 2
-      for ((from2, (to2, fire2, g2, u2, es2)) <- a2.trans; p1 <- a1.getStates)
+      for ((from2, (to2, fire2, g2, cc2, cr2,u2, es2)) <- a2.trans; p1 <- a1.getStates)
         if (ok(fire2))
-          restrans += mkState(p1, from2) -> (mkState(p1, to2), fire2, mkGuard(g2,2), remapUpd(u2,2), es2)
+          restrans += mkState(p1, from2) -> (mkState(p1, to2), fire2, mkGuard(g2,2), renameClocks(cc2,2),cr2.map(c=>getClockName(c,2)), remapUpd(u2,2), es2)
       // communication
-      for ((from1, (to1, fire1, g1, u1, es1)) <- a1.trans; (from2, (to2, fire2, g2, u2, es2)) <- a2.trans) {
+      for ((from1, (to1, fire1, g1, cc1, cr1,u1, es1)) <- a1.trans; (from2, (to2, fire2, g2, cc2,cr2, u2, es2)) <- a2.trans) {
         if (ok2(fire1, fire2))
           //println(s"!! merging ${fire1.mkString("/")} and ${fire2.mkString("/")} -> ${mkPorts(fire1++fire2)}")
           //println(s"!! merging ${es1.mkString("/")} and ${es2.mkString("/")} -> ${mkEdges(es1++es2)}")
           restrans += mkState(from1, from2) ->
             (mkState(to1, to2), mkPorts(fire1 ++ fire2)
               , remapGuard(g1, 1) && remapGuard(g2, 2)
+              , CAnd(renameClocks(cc1,1), renameClocks(cc2,2))
+              , cr1.map(c=> getClockName(c,1))++cr2.map(c=> getClockName(c,2))
               , remapUpd(u1, 1) | remapUpd(u2, 2)
               , mkEdges(es1 ++ es2))
             (mkState(to1, to2), mkPorts(fire1 ++ fire2), mkGuard(g1,1) && mkGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
 
       }
-      //            (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
+      // (mkState(to1, to2), mkPorts(fire1 ++ fire2), remapGuard(g1,1) && remapGuard(g2,2), remapUpd(u1,1) | remapUpd(u2,2), es1 ++ es2)
       // println(s"ports: $newStates")
-      val res1 = HubAutomata(newPorts, mkState(a1.init, a2.init), restrans, a1.initVal ++ a2.initVal)
+
+
+      val resInvariant = (for (l1<-a1.sts; l2<-a2.sts)
+        yield mkState(l1, l2) -> CAnd(a1.inv.withDefaultValue(CTrue)(l1),
+          a2.inv.withDefaultValue(CTrue)(l2))).toMap[Int,ClockCons]
+
+      val res1 = HubAutomata(newPorts
+        , for (l1<-a1.sts; l2<-a2.sts) yield mkState(l1, l2)
+        , mkState(a1.init, a2.init)
+        , restrans
+        , a1.clocks.map(c=>getClockName(c,1))++a2.clocks.map(c=>getClockName(c,2))
+        , resInvariant
+        , a1.initVal ++ a2.initVal)
+
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
 //      println(res2.show)
