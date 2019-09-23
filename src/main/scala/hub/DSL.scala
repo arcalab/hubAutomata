@@ -1,5 +1,7 @@
 package hub
 
+import scala.language.implicitConversions
+
 import hub.analyse.DependencyGraph
 import hub.backend.Dot
 import hub.common.ParseException
