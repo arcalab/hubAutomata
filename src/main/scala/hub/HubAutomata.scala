@@ -483,6 +483,7 @@ object HubAutomata {
     , "mrg"
     , "drain"
     , "timer"
+    , "nbtimer"
   )
 
 
@@ -663,6 +664,22 @@ object HubAutomata {
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("c"), Noop, Set(e)),
             seed -> (seed - 1, Set(b), Ltrue, ET("c",to),Set(), Noop, Set(e)))
+          , Set("c"),Map(seed->LE("c",to)),Map())
+          , seed + 2)
+
+      case Prim(CPrim("nbtimer", _, _, extra), List(a), List(b),_) =>
+        //          var info = extra.iterator.filter(e => e.isInstanceOf[(String,Int)]).map(e => e.asInstanceOf[(String,Int)])
+        //          var to = info.toMap.getOrElse("to",0)
+        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0
+        }
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
+          //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("c"), Noop, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, LE("c",to),Set(), Noop, Set(e)),
+            seed -> (seed - 1, Set(), Ltrue, ET("c",to),Set(), Noop, Set(e)))
           , Set("c"),Map(seed->LE("c",to)),Map())
           , seed + 2)
 
