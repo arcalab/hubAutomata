@@ -70,6 +70,15 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
         , to)
   }
 
+  /**
+    * Returns the set of transitions
+    * @return
+    */
+  def getTransitions: Set[(Int,Int,Set[Int],ClockCons,Set[String],Guard,Update)] =
+    for ((from, (to, fire, g,cc, cr, upd, es)) <- trans) yield
+      (from,to,fire,ifta.analyse.Simplify(cc),cr,g,upd)
+
+
   /* Return the set of input ports */
   def getInputs: Set[Int] = (for((_,(_,_,_,_,_,_,edges)) <- trans) yield edges.flatMap(_.ins)).flatten intersect ports
 
@@ -467,24 +476,8 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
 
 object HubAutomata {
 
-  val PRIMITIVE = Set(
-    "semaphore"
-    , "resource"
-    , "port"
-    , "dataEvent"
-    , "event"
-    , "fifo"
-    , "blackboard"
-    , "node"
-    , "dupl"
-    , "dupls"
-    , "xor"
-    , "xors"
-    , "mrg"
-    , "drain"
-    , "timer"
-    , "nbtimer"
-  )
+  val PRIMITIVE = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","node","dupl","dupls"
+    ,"xor","xors","mrg","drain","timer","nbtimer","writer","reader")
 
 
   // from -> (target, ports, guards, clock constraints, clock resets, update, originalEdge)
