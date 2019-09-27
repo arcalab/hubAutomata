@@ -89,13 +89,13 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     (for ((_, (_, _, g,_ , _,u, _)) <- trans) yield g.vars ++ u.vars).flatten.filterNot(v => globalVars.contains(v.name))
   }
 
-  // number of states, a list of (varTypeName, sizeOfvarTypeName in number of bytes)
-  //  Memory = (Int,List[(String,Int)])
+  // number of states, a list of (varTypeName, sizeOfvarTypeName in number of bytes), number of real value clocks
+  //  Memory = (Int,List[(String,Int)],Int)
   //todo: proper memory class perhaps when vars are of different types.
-  def memory:(Int,List[(String,Int)]) = {
+  def memory:(Int,List[(String,Int)],Int) = {
     val stSize = getStates.size
     val varSize = getInternalVars.toList.map(v => (v.value.getClass.toString, 32))//(32 bit integers) for now all variables are of type int
-    (stSize,varSize)
+    (stSize,varSize,this.clocks.size)
   }
 
 
@@ -409,7 +409,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     */
   private def rmUnusedUpd(u:Update,unused:Set[Var]):Update = u match {
       case Noop => Noop
-      case Asg(x,e) => if (unused.contains(x)) Noop else Asg(x,e)
+      case Asg(x,e) => if (unused.contains(x) && !(x.name.startsWith("_"))) Noop else Asg(x,e)
       case Par(u1,u2) => Par(rmUnusedUpd(u1,unused),rmUnusedUpd(u2,unused))
       case Seq(u1,u2) => Seq(rmUnusedUpd(u1,unused),rmUnusedUpd(u2,unused))
   }
@@ -601,9 +601,9 @@ object HubAutomata {
           , Set(),Map(),Map(Var("c")->Val(0)))
           , seed + 1)
           case Prim(CPrim("writer", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := "D", Set(e))),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), Set(seed),seed, Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 1)
+            (HubAutomata(Set(a), Set(seed),seed, Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
@@ -630,8 +630,6 @@ object HubAutomata {
             seed -> (seed - 1, Set(b), Ltrue, CTrue,Set(), b.toString := "bf", Set(e)))
           , Set(),Map(),Map(Var("bf")->Val(0)))
           , seed + 2)
-      //    case Edge(CPrim("fifofull", _, _, _), List(a), List(b),_) =>
-      //      (HubAutomata(Set(a, b), seed, Set(seed - 1 -> (seed, Set(a), Set(e)), seed -> (seed - 1, Set(b), Set(e)))), seed + 2)
       case Prim(CPrim("blackboardFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a,b), Set(seed,seed-1), seed
           , Set(seed -1 -> (seed, Set(a), Ltrue, CTrue, Set(),("bf" := a.toString) & ("u" := Fun("+",List("u",Val(1)))) , Set(e))
@@ -649,38 +647,28 @@ object HubAutomata {
           , Set(),Map(),Map(Var("c")->Val(1)))
           , seed + 1)
 
-
-//      case Prim(CPrim("timer", _, _, _), List(_), List(_), _) =>
-//        throw new GenerationException(s"Connector with time to be interpreted only as an IFTA instance")
       case Prim(CPrim("timer", _, _, extra), List(a), List(b),_) =>
-        //          var info = extra.iterator.filter(e => e.isInstanceOf[(String,Int)]).map(e => e.asInstanceOf[(String,Int)])
-        //          var to = info.toMap.getOrElse("to",0)
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
-          case _ => 0
-        }
+          case _ => 0}
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
-          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("c"), Noop, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, ET("c",to),Set(), Noop, Set(e)))
-          , Set("c"),Map(seed->LE("c",to)),Map())
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, ET("cl",to),Set(), b.toString := "bf", Set(e)))
+          , Set("cl"),Map(seed->LE("cl",to)),Map())
           , seed + 2)
 
       case Prim(CPrim("nbtimer", _, _, extra), List(a), List(b),_) =>
-        //          var info = extra.iterator.filter(e => e.isInstanceOf[(String,Int)]).map(e => e.asInstanceOf[(String,Int)])
-        //          var to = info.toMap.getOrElse("to",0)
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
-          case _ => 0
-        }
+          case _ => 0}
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
-          //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
-          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("c"), Noop, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, LE("c",to),Set(), Noop, Set(e)),
-            seed -> (seed - 1, Set(), Ltrue, ET("c",to),Set(), Noop, Set(e)))
-          , Set("c"),Map(seed->LE("c",to)),Map())
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), b.toString := "bf", Set(e)),
+            seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",to)),Map())
           , seed + 2)
 
       // unknown name with type 1->1 -- behave as identity
