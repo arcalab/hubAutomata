@@ -1,9 +1,8 @@
 package hub
 
 import scala.language.implicitConversions
-
 import hub.analyse.DependencyGraph
-import hub.backend.Dot
+import hub.backend.{Dot, Uppaal}
 import hub.common.ParseException
 import hub.lang.Parser
 
@@ -22,6 +21,8 @@ object DSL {
   implicit def toAssignment(s:String):Assignment = new Assignment(s)
 
   def toDot(dg:DependencyGraph) = Dot(dg)
+
+  def toUppaal(hub:HubAutomata):String  = Uppaal(hub)
 
   def getDG(u:Update) = DependencyGraph(u)
 

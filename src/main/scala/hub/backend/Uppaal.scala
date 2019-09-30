@@ -20,7 +20,7 @@ import ifta._
 case class Uppaal(locs:Set[Int],init:Int,clocks:Set[String],edges:Set[UppaalEdge],inv:Map[Int,ClockCons],
                   committed:Set[Int],act2locs:Map[Int,Set[Int]]) {}
 
-case class UppaalEdge(from:Int,to:Int,ccons:ClockCons,creset:Set[String],guard:Guard,upd:Update) {}
+case class UppaalEdge(from:Int,to:Int,ports:Set[Int],ccons:ClockCons,creset:Set[String],guard:Guard,upd:Update) {}
 
 object Uppaal {
 
@@ -42,25 +42,26 @@ object Uppaal {
     * @param hub hub automata
     * @return a string with the uppaal model (xml)
     */
-  def apply(hub:HubAutomata): String = { ""
-//    s"""<?xml version="1.0" encoding="utf-8"?>
-//       |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
-//       |<nta>
-//       |<declaration>
-//       |// Place global declarations here.
-//       |// Channels (actions)
-//       |${if (sacts.isEmpty) "" else sacts.mkString("chan ",",",";")}
-//       |</declaration>
-//       |${auts.zipWithIndex.map(x=>mkTemplate(x._1,x._2)).mkString("\n")}
-//       |<system>
-//       |// Place template instantiations here.
-//       |// todo when incorporating variables
-//       |// List one or more processes to be composed into a system.
-//       |system ${if (auts.isEmpty) ""  else usednames.map(n => n._1).mkString("",",",";")}
-//       |</system>
-//       |<queries>
-//       |</queries>
-//       |</nta>""".stripMargin
+  def apply(hub:HubAutomata): String = {
+    val ta = mkTimeAutomata(Simplify(hub))
+    println("UppaalTA:\n" + ta)
+    s"""<?xml version="1.0" encoding="utf-8"?>
+       |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+       |<nta>
+       |<declaration>
+       |// Place global declarations here.
+       |// Channels (actions)
+       |</declaration>
+       |${mkTemplate(ta)}
+       |<system>
+       |// Place template instantiations here.
+       |// todo when incorporating variables
+       |// List one or more processes to be composed into a system.
+       |system Hub;
+       |</system>
+       |<queries>
+       |</queries>
+       |</nta>""".stripMargin
   }
 
   /**
@@ -78,19 +79,40 @@ object Uppaal {
     var maxloc = hub.sts.max
 
     for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
-      newedges += UppaalEdge(from,maxloc+1,cc,cr,g,u)
-      newedges += UppaalEdge(maxloc+1,to,CTrue,Set(),Ltrue,Noop)
+      newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,u)
+      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,Set(),Ltrue,Noop)
       committed += (maxloc+1)
       act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+      newlocs += maxloc+1
       maxloc +=1
     }
 
     Uppaal(newlocs,hub.init,hub.clocks,newedges,hub.inv,committed,act2locs)
   }
 
-  private def mkLocation(loc:Int,committed:Boolean,inv:ClockCons):String = {
+  def mkTemplate(uppaal:Uppaal):String = {
+    val name = "Hub"
+    s"""<template>
+       |<name x="5" y="5">${name}</name>
+       |<declaration>
+       |// Place local declarations here.
+       |// clocks:
+       |${if (uppaal.clocks.nonEmpty) uppaal.clocks.mkString("clock ", ",", ";") else ""}
+       |</declaration>
+       |
+       |// Locations
+       |${uppaal.locs.map(loc => mkLocation(loc,uppaal.inv.getOrElse(loc, CTrue),uppaal.committed contains loc)).mkString("\n\n")}
+       |<init ref="id${uppaal.init}"/>"
+       |
+       |// Transitions
+       |${uppaal.edges.map(mkTransition).mkString("\n\n")}
+       |</template>
+     """.stripMargin
+  }
+
+  private def mkLocation(loc:Int,inv:ClockCons,committed:Boolean):String = {
     s"""<location id="id$loc" x="${loc*100}" y="0">
-       |<name x="${loc*100-10}" y="-34">"L"$loc</name>
+       |<name x="${loc*100-10}" y="-34">L${if (loc>=0) loc else "_"+(-1*loc)}</name>
        |${if (inv==CTrue) "" else mkInvariant(loc*100-10,inv)}
        |${if (committed) "<committed/>" else ""}
        |</location>""".stripMargin
@@ -106,6 +128,35 @@ object Uppaal {
     case GT(c, n) => c+"&gt;"+n
     case LE(c, n) => c+"&lt;="+n
     case GE(c, n) => c+"&gt;="+n
-    case CAnd(cc1, cc2) => mkCC(cc1)+" &amp;&amp; "+mkCC(cc2)
+    case CAnd(cc1, cc2) => mkCC(cc1)+" &amp;&amp; "+ mkCC(cc2)
   }
+
+  private def mkTransition(e:UppaalEdge):String = {
+    s"""<transition>
+       |<source ref="id${e.from}"/>
+       |<target ref="id${e.to}"/>
+       |${if (e.ccons==CTrue /*&& e.guard==LTrue*/) "" else mkGuard(e.from,e.ccons,e.guard)}""".stripMargin +
+       //|${mkActLabel(e)}
+       s"""|${if (e.creset.isEmpty) "" else mkReset(e.from,e.creset)}
+       |</transition>""".stripMargin
+  }
+
+//  private def mkActLabel(e: UppaalEdge):String = {
+//    if (e.ports.endsWith("!") || e.act.endsWith("?"))
+//      s"""<label kind="synchronisation" x="${e.from * 100 + 15}" y="-34">${e.act}</label>"""
+//    else s"""<label kind="comments" x="${e.from * 100 + 15}" y="-34">${e.act}</label>"""
+//  }
+
+  private def mkGuard(from:Int,cc:ClockCons,g:Guard): String =
+    s"""<label kind="guard" x="${from*100+25}" y="-34">${mkCCG(cc,g)}</label>"""
+
+  private def mkCCG(cc:ClockCons,g:Guard):String = if (cc==CTrue) "" else mkCC(cc)
+//    if      (cc==CTrue) mkG(g)
+//    else if (g==FTrue) mkCC(cc)
+//    else mkCC(cc)+" &amp;&amp; "+mkG(g)
+
+//  private def mkG(g:Guard):String = "" // for now ignore guards
+
+  private def mkReset(from:Int,cs:Set[String]): String =
+    s"""<label kind="assignment" x="${from*100+15}" y="-34">${cs.map(_+":=0").mkString(", ")}</label>"""
 }
