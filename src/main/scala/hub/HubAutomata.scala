@@ -477,7 +477,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
 object HubAutomata {
 
   val PRIMITIVE = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","node","dupl","dupls"
-    ,"xor","xors","mrg","drain","timer","nbtimer","writer","reader")
+    ,"xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
 
 
   // from -> (target, ports, guards, clock constraints, clock resets, update, originalEdge)
@@ -593,10 +593,24 @@ object HubAutomata {
                 seed -> (seed, Set(b), Pred(">", List("c", Val(1))), CTrue, Set(),"c" := Fun("-", List("c", Val(1))), Set(e)))
           , Set(),Map(),Map(Var("c")->Val(0)))
           , seed + 1)
-          case Prim(CPrim("writer", _, _, _), List(), List(a),_) =>
-            (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := "D", Set(e))),Set(),Map(),Map()), seed + 1)
+          case Prim(CPrim("writer", _, _, extra), List(), List(a),_) =>
+            val extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            extraInfo.find(e => e.startsWith("writes:")) match {
+              case Some(s) => (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Val(s.drop(7).toInt), Set(e))),Set(),Map(),Map()), seed + 1)
+              case _ => (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Cons("*"), Set(e))),Set(),Map(),Map()), seed + 1)}
           case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
             (HubAutomata(Set(a), Set(seed),seed, Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
+          case Prim(CPrim("nbreader", _, _, extra), List(a), List(),_) =>
+            var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+              case Some(s) => s.drop(3).toInt
+              case _ => 0}
+            (HubAutomata(Set(a), Set(seed,seed-1),seed - 1,
+              Set(seed - 1 -> (seed, Set(), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
+                seed -> (seed - 1, Set(a), Ltrue, LE("cl",to),Set(), "_bf":= a.toString, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+              , Set("cl"),Map(seed->LE("cl",to)),Map())
+              , seed + 2)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
