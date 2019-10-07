@@ -1,6 +1,7 @@
 package hub.backend
 
 import hub._
+import hub.analyse._
 
 /**
   * Created by guille on 18/12/2018.
@@ -34,6 +35,26 @@ object Show {
     case Pred(name, a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") =>
       apply(a1)+name+apply(a2)
     case Pred(name,param) => s"$name(${param.map(apply).mkString(",")})"
+  }
+
+  def apply(f:TemporalFormula): String = f match {
+    case AA(sf) => "A[] " + apply(sf)
+    case AE(sf) => "A<> " + apply(sf)
+    case EA(sf) => "E[] " + apply(sf)
+    case EE(sf) => "E<> " + apply(sf)
+    case Eventually(f1,f2) => apply(f1) + " --> " + apply(f2)
+  }
+
+  def apply(f: StFormula):String = f match {
+    case Deadlock => "deadlock"
+    case TFTrue => "true"
+    case Action(a) => a
+    case DGuard(g) => apply(g)
+    case CGuard(g) => ifta.backend.Show(g)
+    case Not(f1) => "not("+ apply(f1) + ")"
+    case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
+    case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
+    case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
   }
 
 }

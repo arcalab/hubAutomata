@@ -1,10 +1,10 @@
 package hub
 
 import scala.language.implicitConversions
-import hub.analyse.DependencyGraph
-import hub.backend.{Dot, Uppaal}
+import hub.analyse.{DependencyGraph, TemporalFormula}
+import hub.backend.{Dot, Simplify, Uppaal}
 import hub.common.ParseException
-import hub.lang.Parser
+import hub.lang.{Parser, TemporalFormulaParser}
 
 /**
   * Created by guille on 18/12/2018.
@@ -31,4 +31,15 @@ object DSL {
     case f:Parser.NoSuccess =>
       throw new ParseException(f.toString)
   }
+
+  def parseFormula(formula:String):Either[String,List[TemporalFormula]] = TemporalFormulaParser.parse(formula) match {
+    case TemporalFormulaParser.Success(f,_) => Right(f)
+    case e:TemporalFormulaParser.NoSuccess  => Left(e.toString)
+  }
+
+//  def expandFormulas(formulas:List[TemporalFormula],hub:HubAutomata):List[TemporalFormula] = {
+//    val uppaal = Uppaal.mkTimeAutomata(Simplify(hub))
+//
+//  }
+
 }
