@@ -122,13 +122,13 @@ object Uppaal {
     * @return a state formula suitable for uppaal
     */
   def expandStFormula(f: StFormula,act2locs:Map[String,Set[Int]],act2port:Map[String,Int]):StFormula = f match {
-    case Deadlock => Deadlock
+    case Deadlock => f
     case Action(name) =>
-      val locs:Set[StFormula] = act2locs.getOrElse(name,Set()).map(l => Action("L"+portToString(l)))
+      val locs:Set[StFormula] = act2locs.getOrElse(name,Set()).map(l => Action("Hub.L"+portToString(l)))
       if (locs.nonEmpty) locs.foldRight[StFormula](Not(TFTrue))(_||_) else throw new RuntimeException("Action name not found: "+name)
-    case d@DGuard(g) => d
+    case DGuard(g) => f
     case CGuard(cc) => CGuard(expandCCons(cc,act2port))
-    case Not(f1) => Not(expandStFormula(f,act2locs,act2port))
+    case Not(f1) => Not(expandStFormula(f1,act2locs,act2port))
     case And(f1,f2) => And(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
     case Or(f1,f2) => Or(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
     case Imply(f1,f2) => Imply(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
@@ -141,6 +141,7 @@ object Uppaal {
     * @return a suitable clock constraint for uppaal
     */
   def expandCCons(cc:ClockCons,act2port:Map[String,Int]):ClockCons = cc match {
+    case CTrue => cc
     case LE(c,n) => LE(changeClock(c,act2port),n)
     case GE(c,n) => GE(changeClock(c,act2port),n)
     case ET(c,n) => ET(changeClock(c,act2port),n)
@@ -158,7 +159,7 @@ object Uppaal {
     */
   private def changeClock(c:String,act2port:Map[String,Int]):String = {
     if (!c.endsWith(".t")) c
-    else if (act2port.isDefinedAt(c.dropRight(2))) "t"+portToString(act2port(c.dropRight(2)))
+    else if (act2port.isDefinedAt(c.dropRight(2))) "Hub.t"+portToString(act2port(c.dropRight(2)))
     else throw new RuntimeException("Action name not found: "+c)
   }
 
