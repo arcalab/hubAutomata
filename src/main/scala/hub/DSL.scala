@@ -12,6 +12,13 @@ import hub.lang.{Parser, TemporalFormulaParser}
 
 object DSL {
 
+  /* Known names for virtuoso hubs */
+  val hubs:Set[String] = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","eventFull","dataEventFull","fifoFull","blackboardFull")
+
+  /* Known names for primitive connectors */
+  val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
+
+
   class Assignment(n:String) {
     def :=(e:Expr):Update = Asg(Var(n),e)
   }

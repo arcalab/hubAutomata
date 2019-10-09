@@ -136,7 +136,8 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
       // get the reo edge to which p belongs (there is only one because it is an in or out)
       var e = t.get._2._7.find(e => (e.outs ++ e.ins).contains(p))
 
-      if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
+      //if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
+      if ((DSL.primitiveConnectors++DSL.hubs).contains(e.get.prim.name))
         name = getPortIndexedName(p)
       else
         name = e.get.prim.name // if it is user define name, use it
@@ -476,8 +477,8 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
 
 object HubAutomata {
 
-  val PRIMITIVE = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","node","dupl","dupls"
-    ,"xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
+//  val PRIMITIVE = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","node","dupl","dupls"
+//    ,"xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
 
 
   // from -> (target, ports, guards, clock constraints, clock resets, update, originalEdge)
