@@ -69,6 +69,7 @@ object Uppaal {
     */
   def apply(hub:HubAutomata): String = {
     val ta = mkTimeAutomata(Simplify(hub))
+    println("Updates:\n"+ta.edges.map(e => Show(e.upd)).mkString("\n"))
     apply(ta)
   }
 
@@ -87,8 +88,13 @@ object Uppaal {
     var maxloc = hub.sts.max
 
     for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
-      newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,u)
-      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
+      newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,Noop)//u)
+      // experimenting with setting how many times a executed before another action executes
+      var executions:Update = (for( a<-acts;other<-hub.ports;if a!=other) yield {
+        Asg(Var("v"+portToString(a)+"_"+portToString(other)),Fun("+",List(Var("v"+portToString(a)+"_"+portToString(other)),Val(1)))) &
+        Asg(Var("v"+portToString(other)+"_"+portToString(a)),Val(0))
+      }).foldRight[Update](Noop)(_&_)
+      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
       committed += (maxloc+1)
       act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
       newlocs += maxloc+1
@@ -132,6 +138,7 @@ object Uppaal {
     case And(f1,f2) => And(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
     case Or(f1,f2) => Or(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
     case Imply(f1,f2) => Imply(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
+    case Before(f1,f2) => Before(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
   }
 
   /**
@@ -179,6 +186,8 @@ object Uppaal {
        |// Place local declarations here.
        |// clocks:
        |${if (uppaal.clocks.nonEmpty) uppaal.clocks.mkString("clock ", ",", ";") else ""}
+       |// variables:
+       |${mkVariables(uppaal)}
        |</declaration>
        |
        |// Locations
@@ -189,6 +198,14 @@ object Uppaal {
        |${uppaal.edges.map(mkTransition).mkString("\n\n")}
        |</template>
      """.stripMargin
+  }
+
+  private def mkVariables(uppaal: Uppaal):String = {
+    var vs:Set[Var] = uppaal.edges.map(e => e.upd).flatMap(u=>u.vars)
+    // for now only auxiliary variables to verify things like a doesn't executes more than once before b
+    // ignore other variables for now
+    vs = vs.filter(v=>v.name.startsWith("v"))
+    if (vs.nonEmpty) "int[0,2] "+vs.map(Show(_)).mkString("",",",";") else ""
   }
 
   private def mkLocation(loc:Int,inv:ClockCons,committed:Boolean):String = {
@@ -218,9 +235,18 @@ object Uppaal {
        |<target ref="id${e.to}"/>
        |${if (e.ccons==CTrue /*&& e.guard==LTrue*/) "" else mkGuard(e.from,e.ccons,e.guard)}""".stripMargin +
        //|${mkActLabel(e)}
-       s"""|${if (e.creset.isEmpty) "" else mkReset(e.from,e.creset)}
+       s"""|${mkEdgeUpd(e)}
        |</transition>""".stripMargin
   }
+
+  private def mkEdgeUpd(e:UppaalEdge):String = {
+    val supd = Simplify(e.upd)
+    if (e.creset.isEmpty) mkUpd(supd)
+    else if (supd == Noop) mkReset(e.from,e.creset)
+    else mkReset(e.from,e.creset)+" , "+mkUpd(supd)
+  }
+
+  private def mkUpd(u:Update):String = Show(u)
 
 //  private def mkActLabel(e: UppaalEdge):String = {
 //    if (e.ports.endsWith("!") || e.act.endsWith("?"))

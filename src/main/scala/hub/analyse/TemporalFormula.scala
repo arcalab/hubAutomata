@@ -30,3 +30,5 @@ case class Not(f:StFormula)                 extends StFormula
 case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula
 case class Imply(f1:StFormula,f2:StFormula) extends StFormula
+
+case class Before(f1:StFormula,f2:StFormula)extends StFormula

@@ -108,6 +108,9 @@ object Simplify {
       case (_, TFTrue) => TFTrue
       case (f3, f4) => Imply(f3, f4)
     }
+    case Before(f1,f2) => (apply(f1),apply(f2)) match {
+      case (f3, f4) => Before(f3, f4)
+    }
   }
 
 }

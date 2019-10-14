@@ -10,9 +10,9 @@ import hub.analyse._
 object Show {
 
   def apply(u:Update):String = u match {
-    case Asg(x,e) => x.name + " ← " + Show(e)
+    case Asg(x,e) => x.name + " := " + Show(e)//x.name + " ← " + Show(e)
     case Par(u1,u2) => Show(u1) + " | " + Show(u2)
-    case Seq(u1,u2) =>  Show(u1) + " ; " + Show(u2)
+    case Seq(u1,u2) =>  Show(u1) + " , " + Show(u2)//Show(u1) + " ; " + Show(u2)
 //    case Group(u) => "(" + Show(u) + ")"
     case Noop => "" //"noop"
   }
@@ -55,6 +55,6 @@ object Show {
     case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
     case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
+    case Before(f1,f2) => ""
   }
-
 }

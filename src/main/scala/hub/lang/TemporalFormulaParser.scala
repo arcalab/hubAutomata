@@ -31,7 +31,6 @@ object TemporalFormulaParser extends RegexParsers {
     "E"~"<>"~>stFormula ^^ EE |
     stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)}
 
-
   def stFormula:Parser[StFormula] =
     simpleStFormula~opt(boolCond) ^^ {
       case f~Some(cond) => cond(f)
@@ -45,9 +44,10 @@ object TemporalFormulaParser extends RegexParsers {
     identifier ^^ Action
 
   def boolCond:Parser[StFormula => StFormula] =
-    "||"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |
-    "&&"~>stFormula ^^ {f => (f1:StFormula) => And(f1,f)} |
-    "imply"~>stFormula ^^ {f => (f1:StFormula) => Imply(f1,f)}
+    "or"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |
+    "and"~>stFormula ^^ {f => (f1:StFormula) => And(f1,f)} |
+    "imply"~>stFormula ^^ {f => (f1:StFormula) => Imply(f1,f)} |
+    "before"~>stFormula ^^ {f => (f1:StFormula) => Before(f1,f)}
 
   def intCond:Parser[String => ClockCons] =
     "<="~>int ^^ {i => (c:String) => LE(c,i.toInt)} |
