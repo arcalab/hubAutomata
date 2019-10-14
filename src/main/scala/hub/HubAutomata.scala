@@ -4,11 +4,9 @@ import hub.HubAutomata.{Trans, Valuation}
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import hub.common.GenerationException
-
 import ifta._
-
 import preo.ast.CPrim
-import preo.backend.Network.Prim
+import preo.backend.Network.{Port, Prim}
 import preo.backend.{Automata, AutomataBuilder, PortAutomata}
 
 import scala.collection.mutable
@@ -85,6 +83,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
   /* Return the set of output ports */
   def getOutputs: Set[Int] = (for((_,(_,_,_,_,_,_,edges)) <- trans) yield edges.flatMap(_.outs)).flatten intersect ports
 
+
   /* Return the set of internal variable names */
   def getInternalVarsNames: Set[String] =
     (for((_,(_,_,g,_,_,u,_)) <- trans) yield g.vars ++ u.vars).flatten.map(_.name) --
@@ -133,15 +132,24 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     var name = ""
     var t = trans.find(t => t._2._2.contains(p)) //get a transition with p
     if (t.nonEmpty) {
-      // get the reo edge to which p belongs (there is only one because it is an in or out)
-      var e = t.get._2._7.find(e => (e.outs ++ e.ins).contains(p))
-
-      //if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
-      if ((DSL.primitiveConnectors++DSL.hubs).contains(e.get.prim.name))
-        name = getPortIndexedName(p)
-      else
-        name = e.get.prim.name // if it is user define name, use it
-
+      // NOT true: get the reo edge to which p belongs (there is only one because it is an in or out)
+      // find all reo edges to which p belongs,
+      // if it is an interface then there is only one, but if it is a port from a task it can appear in two prims
+      var e = t.get._2._7.filter(e => (e.outs ++ e.ins).contains(p))
+      var extraInfo:Set[String] = e.flatMap(p=> p.prim.extra.filter(e => e.isInstanceOf[String])).map(e => e.asInstanceOf[String])
+      var portName:String = extraInfo.find(e => e.endsWith("!") || e.endsWith("?")) match {
+        case Some(s) => s
+        case _ => ""
+      }
+      if (portName!="")
+        name = portName.split(" ").tail.head.dropRight(1)
+      else {
+        //if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
+        if ((DSL.primitiveConnectors ++ DSL.hubs).contains(e.head.prim.name))
+          name = getPortIndexedName(p)
+        else
+          name = e.head.prim.name // if it is user define name, use it
+      }
 //      portName += (p -> name)
     }
     name
@@ -606,6 +614,10 @@ object HubAutomata {
             var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
               case Some(s) => s.drop(3).toInt
               case _ => 0}
+//            var portName:String = extraInfo.find(e => e.endsWith("!|?")) match {
+//              case Some(s) =>
+//              case _ => a.toString()
+//            }
             (HubAutomata(Set(a), Set(seed,seed-1),seed - 1,
               Set(seed - 1 -> (seed, Set(), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
                 seed -> (seed - 1, Set(a), Ltrue, LE("cl",to),Set(), "_bf":= a.toString, Set(e)),
@@ -803,9 +815,19 @@ object HubAutomata {
         case Fun(n, args) => Fun(n, remapParam(args,aut))
       }
 
+      //find ports from tasks
+      //find all transitions that come from prims that came from tasks
+      val prims:Set[Prim] = (a1.trans++a2.trans).filter(t=> t._2._2.intersect(shared).nonEmpty)
+        .flatMap(t=>t._2._7).filter(p=>p.prim.extra.contains("T"))
+      val preserve:Set[Int] = prims.flatMap(p=>p.ins++p.outs)
+
       // hide internal actions if desired
-      def mkPorts(fire: Set[Int]): Set[Int] = if (hide) fire -- shared else fire
+      // keep ports that come from tasks
+      def mkPorts(fire: Set[Int]): Set[Int] =
+        if (hide) fire -- (shared--preserve) else fire
+
       val newPorts = mkPorts(a1.ports ++ a2.ports)
+
 
       // hide internal edges if desired
       def mkEdges(edges: Set[Prim]): Set[Prim] =
