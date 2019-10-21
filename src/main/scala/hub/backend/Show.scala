@@ -55,6 +55,38 @@ object Show {
     case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
     case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
-    case Before(f1,f2) => ""
+    case Before(f1,f2) => apply(f1) + " before " + apply(f2)
   }
+
+  def apply(f:UppaalFormula): String = f match {
+    case UAA(sf) => "A[] " + apply(sf)
+    case UAE(sf) => "A<> " + apply(sf)
+    case UEA(sf) => "E[] " + apply(sf)
+    case UEE(sf) => "E<> " + apply(sf)
+    case UEventually(f1,f2) => apply(f1) + " --> " + apply(f2)
+  }
+
+  def apply(f: UppaalStFormula):String = f match {
+    case UDeadlock => "deadlock"
+    case UTrue => "true"
+    case Location(l) => l
+    case UDGuard(g) => showUppaalGuard(g)
+    case UCGuard(g) => ifta.backend.Show(g)
+    case UNot(f1) => "not("+ apply(f1) + ")"
+    case UAnd(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
+    case UOr(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
+    case UImply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
+  }
+
+  def showUppaalGuard(g:Guard):String = g match {
+    case Ltrue => "true"
+    case LNot(Ltrue) => "false"
+    case LOr(g1, g2) => showUppaalGuard(g1) + " || " + showUppaalGuard(g2)
+    case LAnd(g1, g2) => showUppaalGuard(g1) + "  && " + showUppaalGuard(g2)
+    case LNot(g) => s"!(${showUppaalGuard(g)})"
+    case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-").contains(name) =>
+      apply(a1)+name+apply(a2)
+    case Pred(name,param) => s"$name(${param.map(apply(_)).mkString(",")})"
+  }
+
 }

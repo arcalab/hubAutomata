@@ -113,4 +113,45 @@ object Simplify {
     }
   }
 
+  def apply(f:UppaalFormula):UppaalFormula = f match {
+    case UAA(sf) => UAA(apply(sf))
+    case UAE(sf) => UAE(apply(sf))
+    case UEA(sf) => UEA(apply(sf))
+    case UEE(sf) => UEE(apply(sf))
+    case UEventually(f1,f2) => UEventually(apply(f1),apply(f2))
+  }
+
+  def apply(sf: UppaalStFormula):UppaalStFormula = sf match {
+    case UDeadlock => UDeadlock
+    case Location(n) => sf
+    case UTrue => UTrue
+    case UDGuard(g)=> UDGuard(apply(g))
+    case UCGuard(c)=> UCGuard(ifta.analyse.Simplify(c))
+    case UNot(UNot(f)) => apply(f)
+    case UNot(f) => UNot(apply(f))
+    case UAnd(f1,f2) => (apply(f1),apply(f2)) match {
+      case (UTrue, f) => f
+      case (f, UTrue) => f
+      case (UNot(UTrue), _) => UNot(UTrue)
+      case (_, UNot(UTrue)) => UNot(UTrue)
+      case (UNot(f3), f4) => if (f3 == f4) UNot(UTrue) else UAnd(UNot(f3), f4)
+      case (f3, UNot(f4)) => if (f3 == f4) UNot(UTrue) else UAnd(f3, UNot(f4))
+      case (f3, f4) => if (f3 == f4) f3 else UAnd(f3, f4)
+    }
+    case UOr(f1,f2) => (apply(f1),apply(f2)) match {
+      case (UTrue,f) => UTrue
+      case (f,UTrue) => UTrue
+      case (UNot(UTrue), f) => f
+      case (f,UNot(UTrue)) => f
+      case (UNot(f3),f4) => if (f3==f4) UTrue else UOr(UNot(f3),f4)
+      case (f3,UNot(f4)) => if (f3==f4) UTrue else UOr(f3,UNot(f4))
+      case (f3,f4) => if (f3==f4) f3 else UOr(f3,f4)
+    }
+    case UImply(f1,f2) => (apply(f1),apply(f2)) match {
+      case (UNot(UTrue), _) => UTrue
+      case (_, UTrue) => UTrue
+      case (f3, f4) => UImply(f3, f4)
+    }
+  }
+
 }
