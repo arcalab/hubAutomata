@@ -116,7 +116,7 @@ object Uppaal {
     * @return Uppaal model
     */
   def fromFormula(tf:TemporalFormula,hub:HubAutomata):Uppaal = tf match {
-    case f@Eventually(Action(name),Before(f2,f3)) => fromEventuallyBefore(f,hub)
+    case f@Eventually(Action(name),Before(f2,f3)) => fromEventuallyBefore(f,Simplify(hub))
     case f@Eventually(f1,Before(f2,f3)) =>
       throw new RuntimeException("Only an action is supported on the left side of an eventually before clause")
     case formula => mkTimeAutomata(hub)
@@ -160,49 +160,6 @@ object Uppaal {
       Uppaal(newlocs,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs)
   }
 
-//  /**
-//    * Given a temporal formula with syntactic sugar, expand actions an clocks of action to locations based on a given mapping
-//    * @param tf temporal formula with syntactic sugar
-//    * @param act2locs a map from action names to locations where those actions execute
-//    * @param act2port a map from an action name to the corresponding int port number
-//    * @return a temporal logic suitable for uppaal
-//    */
-//  def expandTemporalFormula(tf:TemporalFormula,act2locs:Map[String,Set[Int]],act2port:Map[String,Int]):TemporalFormula = tf match {
-//    case AA(f) => AA(expandStFormula(f,act2locs,act2port))
-//    case AE(f) => AE(expandStFormula(f,act2locs,act2port))
-//    case EA(f) => EA(expandStFormula(f,act2locs,act2port))
-//    case EE(f) => EE(expandStFormula(f,act2locs,act2port))
-//    case Eventually(f1,f2) => Eventually(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
-//  }
-//
-//  /**
-//    * Expand action names and clocks of actions to corresponding locations and clocks
-//    * @param f state formula
-//    * @param act2locs a map from action names to locations where those actions execute
-//    * @param act2port a map from an action name to the corresponding int port number
-//    * @return a state formula suitable for uppaal
-//    */
-//  def expandStFormula(f: StFormula,act2locs:Map[String,Set[Int]],act2port:Map[String,Int]):StFormula = f match {
-//    case Deadlock => f
-//    case Action(name) =>
-//      val locs:Set[StFormula] = act2locs.getOrElse(name,Set()).map(l => Action("Hub.L"+portToString(l)))
-//      if (locs.nonEmpty) locs.foldRight[StFormula](Not(TFTrue))(_||_) else throw new RuntimeException("Action name not found: "+name)
-//    case DGuard(g) => f
-//    case CGuard(cc) => CGuard(expandCCons(cc,act2port))
-//    case Not(f1) => Not(expandStFormula(f1,act2locs,act2port))
-//    case And(f1,f2) => And(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
-//    case Or(f1,f2) => Or(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
-//    case Imply(f1,f2) => Imply(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
-//    case Before(Action(a1),Action(a2)) =>
-//        var a1n = if (act2port.isDefinedAt(a1)) act2port(a1) else throw new RuntimeException("Unknown port name in: "+a1)
-//        var a2n = if (act2port.isDefinedAt(a2)) act2port(a2) else throw new RuntimeException("Unknown port name in: "+a2)
-//      And(DGuard(Pred("==",List(Var("v"+a1n+"_"+a2n),Val(1)))),expandStFormula(Action(a2),act2locs,act2port))
-//    case Before(f1,f2) =>
-//      throw new RuntimeException("Only single actions are supported on an eventually before clause")
-////      Before(expandStFormula(f1,act2locs,act2port),expandStFormula(f2,act2locs,act2port))
-//  }
-
-
   /**
     * @param formula temporal formula with syntactic sugar
     * @param act2locs a map from action names to locations where those actions execute
@@ -244,25 +201,6 @@ object Uppaal {
     tf2UF(formula)
   }
 
-//  def toVerifyta(f:UppaalFormula):String = f match {
-//    case UAA(sf) => "A[] " + toVerifyta(sf)
-//    case UAE(sf) => "A<> " + toVerifyta(sf)
-//    case UEA(sf) => "E[] " + toVerifyta(sf)
-//    case UEE(sf) => "E<> " + toVerifyta(sf)
-//    case UEventually(f1,f2) => toVerifyta(f1) + " --> " + toVerifyta(f2)
-//  }
-//
-//  def toVerifyta(sf:UppaalStFormula):String = sf match {
-//    case UDeadlock => "deadlock"
-//    case UTrue => "true"
-//    case Location(l) => l
-//    case UDGuard(g) => Show(g)
-//    case UCGuard(g) => mkCC(g)
-//    case UNot(f1) => "not("+ toVerifyta(f1) + ")"
-//    case UAnd(f1,f2) => "(" + toVerifyta(f1) + " and " + toVerifyta(f2) + ")"
-//    case UOr(f1,f2) => "(" + toVerifyta(f1) + " or " + toVerifyta(f2) + ")"
-//    case UImply(f1,f2) => "(" + toVerifyta(f1) + " imply " + toVerifyta(f2) + ")"
-//  }
 
   /**
     * Expand clock constraints of the form action.t to the actual clock associanted to the action based on act2port
@@ -377,29 +315,10 @@ object Uppaal {
     s"""<label kind="guard" x="${from*100+25}" y="-34">${mkCCG(cc,g)}</label>"""
 
   private def mkCCG(cc:ClockCons,g:Guard):String = //if (cc==CTrue) "" else mkCC(cc)
-    if      (cc==CTrue) Show(g)
+    if      (cc==CTrue) Show.showUppaalGuard(g)
     else if (g==Ltrue) mkCC(cc)
-    else mkCC(cc)+" &amp;&amp; "+Show(g)
+    else mkCC(cc)+" &amp;&amp; "+Show.showUppaalGuard(g)
 
-//  private def mkG(g:Guard):String = g match {
-//    case Ltrue => "true"
-//    case LNot(Ltrue) => "false"
-//    case LOr(g1, g2) => mkG(g1) + "  |amp;|amp; " + mkG(g2)
-//    case LAnd(g1, g2) => mkG(g1) + "  &amp;&amp; " + mkG(g2)
-//    case LNot(g) => s"!amp;(${mkG(g)})"
-//    case Pred(name, a1::a2::Nil) if isKnownBinOp(name) =>
-//    Show(a1)+binOpToStr(name)+Show(a2)
-//    case Pred(name,param) => s"$name(${param.map(Show(_)).mkString(",")})"
-//  }
-//
-//  private def isKnownBinOp(op:String):Boolean = Set("<=","<","==",">",">=","+","-").contains(op)
-//  private def binOpToStr(op:String):String = op match {
-//    case "<=" => "&lt;="
-//    case "<" => "&lt;"
-//    case ">" => "&gt;"
-//    case ">=" => "&gt;="
-//    case _ => op
-//  }
 
   private def mkUpdates(from:Int,upds:String): String =
     s"""<label kind="assignment" x="${from*100+15}" y="-34">${upds}</label>"""

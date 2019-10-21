@@ -78,7 +78,7 @@ object Show {
     case UImply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
   }
 
-  def showUppaalGuard(g:Guard):String = g match {
+  def showUppaalGuard(g:Guard):String = Simplify(g) match {
     case Ltrue => "true"
     case LNot(Ltrue) => "false"
     case LOr(g1, g2) => showUppaalGuard(g1) + " || " + showUppaalGuard(g2)
