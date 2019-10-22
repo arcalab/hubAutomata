@@ -29,7 +29,8 @@ object TemporalFormulaParser extends RegexParsers {
     "A"~"<>"~>stFormula ^^ AE |
     "E"~"[]"~>stFormula ^^ EA |
     "E"~"<>"~>stFormula ^^ EE |
-    stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)}
+    stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)} |
+    stFormula ~"until"~ stFormula ^^ {case f1~_~f2 => Until(f1,f2)}
 
   def stFormula:Parser[StFormula] =
     simpleStFormula~opt(boolCond) ^^ {

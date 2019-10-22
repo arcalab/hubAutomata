@@ -75,6 +75,7 @@ object Simplify {
     case EA(sf) => EA(apply(sf))
     case EE(sf) => EE(apply(sf))
     case Eventually(f1,f2) => Eventually(apply(f1),apply(f2))
+    case Until(f1,f2) => Until(apply(f1),apply(f2))
   }
 
   def apply(sf: StFormula):StFormula = sf match {

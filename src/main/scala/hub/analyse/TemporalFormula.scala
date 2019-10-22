@@ -16,7 +16,7 @@ case class EA(f:StFormula) extends TemporalFormula
 case class EE(f:StFormula) extends TemporalFormula
 case class Eventually(f1:StFormula,f2:StFormula) extends TemporalFormula
 //case class EventuallyBefore(f1: StFormula,f2: StFormula,f3:StFormula) extends TemporalFormula
-//case class Until(f1:StFormula,f2:StFormula) extends TemporalFormula
+case class Until(f1:StFormula,f2:StFormula) extends TemporalFormula
 
 sealed trait StFormula {
   def ||(other:StFormula) = Or(this,other)
