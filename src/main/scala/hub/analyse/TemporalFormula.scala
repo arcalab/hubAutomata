@@ -8,7 +8,22 @@ import ifta.ClockCons
   */
 
 
-sealed trait TemporalFormula
+sealed trait TemporalFormula {
+
+  def hasUntil:Boolean = this match {
+    case Until(_,_) => true
+    case _          => false
+  }
+
+  def hasBefore:Boolean = this match {
+    case AA(f) => f.hasBefore
+    case AE(f) => f.hasBefore
+    case EA(f) => f.hasBefore
+    case EE(f) => f.hasBefore
+    case Eventually(f1,f2) => f1.hasBefore || f2.hasBefore
+    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
+  }
+}
 
 case class AA(f:StFormula) extends TemporalFormula
 case class AE(f:StFormula) extends TemporalFormula
@@ -19,8 +34,18 @@ case class Eventually(f1:StFormula,f2:StFormula) extends TemporalFormula
 case class Until(f1:StFormula,f2:StFormula) extends TemporalFormula
 
 sealed trait StFormula {
+
   def ||(other:StFormula) = Or(this,other)
   def &&(other:StFormula) = And(this,other)
+
+  def hasBefore:Boolean = this match {
+    case Before(f1,f2)  => true
+    case And(f1,f2)     => f1.hasBefore || f2.hasBefore
+    case Or(f1,f2)      => f1.hasBefore || f2.hasBefore
+    case Imply(f1,f2)   => f1.hasBefore || f2.hasBefore
+    case Not(f1)        => f1.hasBefore
+    case _              => false
+  }
 }
 
 case object Deadlock                        extends StFormula

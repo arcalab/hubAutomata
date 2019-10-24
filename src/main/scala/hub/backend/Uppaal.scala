@@ -85,7 +85,6 @@ object Uppaal {
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("port"))
     portvars = portvars -- initVars.map(i=>i._1)
 
-    println("Making uppaal model from a network of uppaal ta")
     s"""<?xml version="1.0" encoding="utf-8"?>
        |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
        |<nta>
@@ -118,8 +117,8 @@ object Uppaal {
     * @return a string with the uppaal model (xml)
     */
   def apply(hub:HubAutomata): String = {
-    val ta = mkTimeAutomata(Simplify(hub))
-    println("Updates:\n"+ta.edges.map(e => Show(e.upd)).mkString("\n"))
+    val ta = mkTimeAutomata(hub)
+    //println("Updates:\n"+ta.edges.map(e => Show(e.upd)).mkString("\n"))
     apply(ta)
   }
 
@@ -129,8 +128,8 @@ object Uppaal {
     * @param hub hub automata
     * @return uppaal timed automata
     */
-  def mkTimeAutomata(hub:HubAutomata):Uppaal = {
-    val hubedges = hub.getTransitions
+  def mkTimeAutomata(hubAut:HubAutomata):Uppaal = {
+    val hub = Simplify(hubAut)
 
     var newedges = Set[UppaalEdge]()
     var committed = Set[Int]()
@@ -138,7 +137,7 @@ object Uppaal {
     var maxloc = hub.sts.max
     var initVal:Set[(Var,Expr)] = Set()
 
-    for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
       var names = acts.map(hub.getPortName)
       // set all true to all variables named as the actions (to keep track of when an action fire)
       var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
@@ -454,7 +453,7 @@ object Uppaal {
 
   private def mkTemplate(uppaal:Uppaal):String = {
     val name = uppaal.name
-    println("Making uppaal template from uppaal ta named: "+name)
+
     s"""<template>
        |<name x="5" y="5">${name}</name>
        |<declaration>
