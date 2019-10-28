@@ -33,6 +33,7 @@ case class Eventually(f1:StFormula,f2:StFormula) extends TemporalFormula
 //case class EventuallyBefore(f1: StFormula,f2: StFormula,f3:StFormula) extends TemporalFormula
 case class Until(f1:StFormula,f2:StFormula) extends TemporalFormula
 
+
 sealed trait StFormula {
 
   def ||(other:StFormula) = Or(this,other)
@@ -53,6 +54,7 @@ case object TFTrue                          extends StFormula
 case class DGuard(g:Guard)                  extends StFormula
 case class CGuard(c:ClockCons)              extends StFormula
 case class Action(a:String)                 extends StFormula
+case class Can(f:StFormula)                 extends StFormula
 case class Not(f:StFormula)                 extends StFormula
 case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula

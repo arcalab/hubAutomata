@@ -39,8 +39,17 @@ object TemporalFormulaParser extends RegexParsers {
 
   def simpleStFormula:Parser[StFormula] =
     """deadlock""".r ^^ {_ => Deadlock} |
-    "("~>stFormula<~")" |
-    "not"~>stFormula ^^ Not |
+    "not"~>parFormula^^ Not |
+    "not"~>singleStFormula ^^ Not |
+    "can"~>parFormula^^ Can |
+    "can"~>singleStFormula ^^ Can |
+    parFormula |
+    singleStFormula
+
+  def parFormula:Parser[StFormula] =
+    "("~>stFormula<~")"
+
+  def singleStFormula:Parser[StFormula] =
     identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
     identifier ^^ Action
 

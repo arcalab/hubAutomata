@@ -52,7 +52,8 @@ object Show {
     case Action(a) => a
     case DGuard(g) => apply(g)
     case CGuard(g) => ifta.backend.Show(g)
-    case Not(f1) => "not("+ apply(f1) + ")"
+    case Can(f1) => "can ("+apply(f1)+")"
+    case Not(f1) => "not ("+ apply(f1) + ")"
     case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
     case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"

@@ -44,28 +44,9 @@ object Uppaal {
     * @return a string with the uppaal model (xml)
     */
   def apply(uppaal:Uppaal):String = {
+
     apply(Set(uppaal))
-//    s"""<?xml version="1.0" encoding="utf-8"?>
-//       |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
-//       |<nta>
-//       |<declaration>
-//       |// Place global declarations here.
-//       |// clocks:
-//       |${if (uppaal.clocks.nonEmpty) uppaal.clocks.mkString("clock ", ",", ";") else ""}
-//       |// variables:
-//       |${mkVariables(uppaal)}
-//       |// Channels (actions)
-//       |</declaration>
-//       |${mkTemplate(uppaal)}
-//       |<system>
-//       |// Place template instantiations here.
-//       |// todo when incorporating variables
-//       |// List one or more processes to be composed into a system.
-//       |system Hub;
-//       |</system>
-//       |<queries>
-//       |</queries>
-//       |</nta>""".stripMargin
+
   }
 
   /**
@@ -74,6 +55,7 @@ object Uppaal {
     * @return a string with the uppaal model (xml)
     */
   def apply(uppaals:Set[Uppaal]):String = {
+
     // all clocks to declare (everything global for now to simplify naming)
     val clocks:Set[String] = uppaals.flatMap(u=>u.clocks)
     // get all variables to declare
@@ -108,6 +90,7 @@ object Uppaal {
        |<queries>
        |</queries>
        |</nta>""".stripMargin
+
   }
 
 
@@ -129,6 +112,7 @@ object Uppaal {
     * @return uppaal timed automata
     */
   def mkTimeAutomata(hubAut:HubAutomata):Uppaal = {
+
     val hub = Simplify(hubAut)
 
     var newedges = Set[UppaalEdge]()
@@ -154,12 +138,13 @@ object Uppaal {
       // new max location number
       maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
-      if(from==hub.init)
-        initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//      if(from==hub.init)
+//        initVal++= names.map(a=>(Var("port"+a),Val(1)))
     }
     val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
     Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
+
   }
 
   /**
@@ -170,11 +155,13 @@ object Uppaal {
     * @return Uppaal model
     */
   def fromFormula(tf:TemporalFormula,hub:HubAutomata):Set[Uppaal] = tf match {
+
     case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
     case f@Eventually(Action(name),Before(f2,f3)) => Set(fromEventuallyBefore(f,Simplify(hub)))
     case f@Eventually(f1,Before(f2,f3)) =>
       throw new FormulaException("Only an action is supported on the left side of an eventually before clause")
     case formula => Set(mkTimeAutomata(Simplify(hub)))
+
   }
 
   private def fromUntil(f:Until,hub:HubAutomata):Set[Uppaal] =  f match {
@@ -208,8 +195,8 @@ object Uppaal {
         // new max location number
         maxloc +=1
         // initialize port variables to true if this edge goes out of the initial location
-        if(from==hub.init)
-          initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//        if(from==hub.init)
+//          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
       val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
@@ -346,8 +333,8 @@ object Uppaal {
         // new max location
         maxloc +=1
         // initialize port variables to true if this edge goes out of the initial location
-        if(from==hub.init)
-          initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//        if(from==hub.init)
+//          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
       val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
@@ -360,7 +347,7 @@ object Uppaal {
     * @param act2port a map from an action name to the corresponding int port number
     * @return a temporal logic suitable for uppaal
     */
-  def toUppaalFormula(formula:TemporalFormula, act2locs:Map[String,Set[Int]], act2port:Map[String,Int]):UppaalFormula = {
+  def toUppaalFormula(formula:TemporalFormula, act2locs:Map[String,Set[Int]], act2port:Map[String,Int],initState:Int=0):UppaalFormula = {
     def tf2UF(tf: TemporalFormula): UppaalFormula = tf match {
       case AA(sf) => UAA(stf2UStF(sf))
       case AE(sf) => UAE(stf2UStF(sf))
@@ -392,11 +379,12 @@ object Uppaal {
       case Deadlock => UDeadlock
       case TFTrue => UTrue
       case Action(a) =>
-        //val locs: Set[UppaalStFormula] = act2locs.getOrElse(a, Set()).map(l => Location("Hub.L" + portToString(l)))
-        //if (locs.nonEmpty) locs.foldRight[UppaalStFormula](UNot(UTrue))(_ || _) else throw new RuntimeException("Action name not found: " + a)
+//        val locs: Set[UppaalStFormula] = act2locs.getOrElse(a, Set()).map(l => Location("Hub.L" + portToString(l)))
+//        if (locs.nonEmpty) locs.foldRight[UppaalStFormula](UNot(UTrue))(_ || _) else throw new RuntimeException("Action name not found: " + a)
         UDGuard(Pred("==", List(Var("port" + a), Val(1))))
       case DGuard(g) => UDGuard(g)
       case CGuard(g) => UCGuard(expandCCons(g,act2port))
+      case Can(f1) => UOr(Location("Hub.L"+portToString(initState)),stf2UStF(f1)) //mkCan(f1)
       case Not(f1) => UNot(stf2UStF(f1))
       case And(f1, f2) => UAnd(stf2UStF(f1),stf2UStF(f2))
       case Or(f1, f2) => UOr(stf2UStF(f1),stf2UStF(f2))
@@ -407,8 +395,17 @@ object Uppaal {
         val res = stf2UStF(And(DGuard(Pred("==", List(Var("v" + a1n + "_" + a2n), Val(1)))), Action(a2)))
         res
       case Before(f1, f2) =>
-        throw new RuntimeException("Only single actions are supported on an eventually before clause")
+        throw new FormulaException("Only single actions are supported on an eventually before clause")
     }
+
+//    def mkCan(sf: StFormula):UppaalStFormula = sf match {
+//      case Action(a) =>  UOr(Location("Hub.L"+portToString(initState)),UDGuard(Pred("==", List(Var("port" + a), Val(1)))))
+//      case And(f1,f2)=> UAnd(mkCan(f1),mkCan(f2))
+//      case Or(f1,f2) => UOr(mkCan(f1),mkCan(f2))
+//      case Imply(f1,f2) => UImply(mkCan(f1),mkCan(f2))
+//      case Not(f1) => UNot(mkCan(f1))
+//      case _ => throw new FormulaException("Only simple logic expressions over actions are allowed inside a Can clause - in: "+Show(sf))
+//    }
 
     tf2UF(formula)
   }
