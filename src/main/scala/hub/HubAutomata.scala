@@ -657,7 +657,7 @@ object HubAutomata {
           , seed + 2)
       // for now asumues fifo1 TODO: add support for receiving Size of fifo
       case Prim(CPrim("fifofull",x,y,z), a, b, c) =>
-        buildAutomata(Prim(CPrim("fifofull",x,y,z), a, b, c),seed)
+        buildAutomata(Prim(CPrim("fifoFull",x,y,z), a, b, c),seed)
       case Prim(CPrim("fifoFull",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
