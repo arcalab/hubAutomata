@@ -624,6 +624,21 @@ object HubAutomata {
                 seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
               , Set("cl"),Map(seed->LE("cl",to)),Map())
               , seed + 2)
+          case Prim(CPrim("await", _, _, extra), List(a,b), List(),_) =>
+            var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+              case Some(s) => s.drop(3).toInt
+              case _ => 0}
+            //            var portName:String = extraInfo.find(e => e.endsWith("!|?")) match {
+            //              case Some(s) =>
+            //              case _ => a.toString()
+            //            }
+            (HubAutomata(Set(a,b), Set(seed,seed-1),seed - 1,
+              Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
+                seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), "bf":= b.toString, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+              , Set("cl"),Map(seed->LE("cl",to)),Map())
+              , seed + 2)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
           case Prim(CPrim("noSrc", _, _, _), List(a), List(),_) =>
@@ -680,6 +695,17 @@ object HubAutomata {
           , seed + 2)
 
       case Prim(CPrim("nbtimer", _, _, extra), List(a), List(b),_) =>
+        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
+            seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), b.toString := "bf", Set(e)),
+            seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , seed + 2)
+      case Prim(CPrim("timeout", _, _, extra), List(a), List(b),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt

@@ -13,7 +13,7 @@ import hub.lang.{Parser, TemporalFormulaParser}
 object DSL {
 
   /* Known names for virtuoso hubs */
-  val hubs:Set[String] = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","eventFull","dataEventFull","fifoFull","blackboardFull")
+  val hubs:Set[String] = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","eventFull","dataEventFull","fifoFull","blackboardFull","await","timeout")
 
   /* Known names for primitive connectors */
   val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
