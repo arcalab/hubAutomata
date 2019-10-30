@@ -5,6 +5,7 @@ import hub.analyse.{DependencyGraph, TemporalFormula}
 import hub.backend.{Dot, Simplify, Uppaal}
 import hub.common.ParseException
 import hub.lang.{Parser, TemporalFormulaParser}
+import preo.ast.{IVal, Port, Prim}
 
 /**
   * Created by guille on 18/12/2018.
@@ -16,7 +17,7 @@ object DSL {
   val hubs:Set[String] = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","eventFull","dataEventFull","fifoFull","blackboardFull","await","timeout")
 
   /* Known names for primitive connectors */
-  val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader")
+  val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader","putNB","getNB")
 
 
   class Assignment(n:String) {
@@ -43,10 +44,5 @@ object DSL {
     case TemporalFormulaParser.Success(f,_) => Right(f)
     case e:TemporalFormulaParser.NoSuccess  => Left(e.toString)
   }
-
-//  def expandFormulas(formulas:List[TemporalFormula],hub:HubAutomata):List[TemporalFormula] = {
-//    val uppaal = Uppaal.mkTimeAutomata(Simplify(hub))
-//
-//  }
 
 }

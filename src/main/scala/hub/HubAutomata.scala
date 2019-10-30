@@ -716,7 +716,32 @@ object HubAutomata {
             seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
           , Set("cl"),Map(seed->LE("cl",to)),Map())
           , seed + 2)
-
+      case Prim(CPrim("putNB", _, _, extra), List(a), List(err,ok),_) =>
+        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        (HubAutomata(Set(a,err,ok), Set(seed,seed-1),seed - 1,
+          Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
+            seed -> (seed - 1, Set(ok), Ltrue, LE("cl",to),Set(), ok.toString := "bf", Set(e)),
+            seed -> (seed - 1, Set(err), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , seed + 2)
+      case Prim(CPrim("getNB", _, _, extra), List(in,go), List(c),_) =>
+        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        //            var portName:String = extraInfo.find(e => e.endsWith("!|?")) match {
+        //              case Some(s) =>
+        //              case _ => a.toString()
+        //            }
+        (HubAutomata(Set(in,go,c), Set(seed,seed-1),seed - 1,
+          Set(seed - 1 -> (seed, Set(go), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
+            seed -> (seed - 1, Set(in,c), Ltrue, LE("cl",to),Set(), "bf":= in.toString, Set(e)),
+            seed -> (seed - 1, Set(c), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , seed + 2)
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
         (HubAutomata(Set(a, b), Set(seed),seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(), Map()), seed + 1)
