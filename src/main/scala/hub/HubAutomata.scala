@@ -20,7 +20,9 @@ import scala.collection.mutable
   * @param trans Transitions - Relation between input and output states, with associated
   *              sets of actions and of edges (as in [[Prim]]).
   */
-case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:Set[String],inv:Map[Int,ClockCons],initVal:Valuation) extends Automata {
+case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
+                       clocks:Set[String],inv:Map[Int,ClockCons],initVal:Valuation,
+                       taskPort:(Set[Int],Set[Int])=(Set(),Set())) extends Automata {
 
   private var inSeed = 0
   private var outSeed = 0
@@ -125,6 +127,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     * if the port is associated to an edge that is named by the user (e.g., put1), it uses such a name
     * otherwise it uses a name a generic name inX for inputs and outX for outputs,
     * where X is an index identifying different ins and outs
+    *
     * @param p
     * @return
     */
@@ -163,6 +166,14 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     * @return
     */
   private def getPortIndexedName(p:Int):String = {
+    if (taskPort._1.contains(p)) {
+      inSeed+=1
+      s"in${if (getInputs.size >1) inSeed else "" }"
+    } else
+    if (taskPort._2.contains(p)) {
+      outSeed+=1
+      s"out${if (getOutputs.size >1) outSeed else "" }"
+    } else
     if (getInputs.contains(p)){
       inSeed+=1
       s"in${if (getInputs.size >1) inSeed else "" }"
@@ -180,7 +191,11 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     * @return
     */
   private def portDir(p:Int):String =
-    if (getInputs.contains(p))
+    if (taskPort._1.contains(p))
+      "↓"
+    else if (taskPort._2.contains(p))
+      "↑"
+    else if (getInputs.contains(p))
       "↓"
     else if (getOutputs.contains(p))
       "↑"
@@ -284,7 +299,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
       }
     }
     var nInv = inv.filter(i => nsts.contains(i._1))
-    HubAutomata(ports, nsts, init, ntrans, clocks,nInv, initVal)
+    HubAutomata(ports, nsts, init, ntrans, clocks,nInv, initVal,taskPort)
   }
 
   // TODO: maybe move these methods to Simplify?
@@ -340,7 +355,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
 
     val nInitVal = initVal -- unusedVars
 
-    HubAutomata(ports,sts,init,ntrans,clocks,inv, nInitVal)
+    HubAutomata(ports,sts,init,ntrans,clocks,inv, nInitVal,taskPort)
   }
 
 
@@ -437,7 +452,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,clocks:S
     for ((from,(to,p,g,cc,cr,u,es)) <- trans)
       ntrans += ((from,(to,p,g,cc,cr,u.instance,es)))
 
-    HubAutomata(ports,sts,init,ntrans,clocks,inv,initVal)
+    HubAutomata(ports,sts,init,ntrans,clocks,inv,initVal,taskPort)
   }
 
   // todo: check if it needs update after incorporating clock constraints
@@ -607,10 +622,17 @@ object HubAutomata {
           case Prim(CPrim("writer", _, _, extra), List(), List(a),_) =>
             val extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             extraInfo.find(e => e.startsWith("writes:")) match {
-              case Some(s) => (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Val(s.drop(7).toInt), Set(e))),Set(),Map(),Map()), seed + 1)
-              case _ => (HubAutomata(Set(a), Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Cons("*"), Set(e))),Set(),Map(),Map()), seed + 1)}
-          case Prim(CPrim("reader", _, _, _), List(a), List(),_) =>
-            (HubAutomata(Set(a), Set(seed),seed, Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),Set(),Map(),Map()), seed + 1)
+              case Some(s) => (HubAutomata(Set(a),
+                Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Val(s.drop(7).toInt), Set(e))),
+                Set(),Map(),Map(),if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 1)
+              case _ => (HubAutomata(Set(a),
+                Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Cons("*"), Set(e))),
+                Set(),Map(),Map(),if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 1)}
+          case Prim(CPrim("reader", _, _, extra), List(a), List(),_) =>
+            (HubAutomata(Set(a),
+              Set(seed),seed,
+              Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),
+              Set(),Map(),Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set())), seed + 1)
           case Prim(CPrim("nbreader", _, _, extra), List(a), List(),_) =>
             var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
@@ -624,7 +646,7 @@ object HubAutomata {
               Set(seed - 1 -> (seed, Set(), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
                 seed -> (seed - 1, Set(a), Ltrue, LE("cl",to),Set(), "_bf":= a.toString, Set(e)),
                 seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-              , Set("cl"),Map(seed->LE("cl",to)),Map())
+              , Set("cl"),Map(seed->LE("cl",to)),Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set()))
               , seed + 2)
           case Prim(CPrim("await", _, _, extra), List(a,b), List(),_) =>
             var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -705,7 +727,7 @@ object HubAutomata {
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
             seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), b.toString := "bf", Set(e)),
             seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , Set("cl"),Map(seed->LE("cl",to)),Map(),(Set(),Set(b)))
           , seed + 2)
       case Prim(CPrim("timeout", _, _, extra), List(a), List(b),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -727,7 +749,7 @@ object HubAutomata {
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
             seed -> (seed - 1, Set(ok), Ltrue, LE("cl",to),Set(), ok.toString := "bf", Set(e)),
             seed -> (seed - 1, Set(err), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , Set("cl"),Map(seed->LE("cl",to)),Map(),(Set(),Set(ok)))
           , seed + 2)
       case Prim(CPrim("getNB", _, _, extra), List(in,go), List(c),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -742,7 +764,7 @@ object HubAutomata {
           Set(seed - 1 -> (seed, Set(go), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
             seed -> (seed - 1, Set(in,c), Ltrue, LE("cl",to),Set(), "bf":= in.toString, Set(e)),
             seed -> (seed - 1, Set(c), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map())
+          , Set("cl"),Map(seed->LE("cl",to)),Map(),(Set(in),Set()))
           , seed + 2)
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
@@ -868,11 +890,13 @@ object HubAutomata {
         case Fun(n, args) => Fun(n, remapParam(args,aut))
       }
 
-      //find ports from tasks
-      //find all transitions that come from prims that came from tasks
-      val prims:Set[Prim] = (a1.trans++a2.trans).filter(t=> t._2._2.intersect(shared).nonEmpty)
-        .flatMap(t=>t._2._7).filter(p=>p.prim.extra.contains("T"))
-      val preserve:Set[Int] = prims.flatMap(p=>p.ins++p.outs)
+//      //find ports from tasks
+//      //find all transitions that come from prims that came from tasks
+//      val prims:Set[Prim] = (a1.trans++a2.trans).filter(t=> t._2._2.intersect(shared).nonEmpty)
+//        .flatMap(t=>t._2._7).filter(p=>p.prim.extra.contains("T"))
+//      val preserve:Set[Int] = prims.flatMap(p=>p.ins++p.outs)
+
+      val preserve = a1.taskPort._1++a1.taskPort._2++a2.taskPort._1++a2.taskPort._2
 
       // hide internal actions if desired
       // keep ports that come from tasks
@@ -948,11 +972,11 @@ object HubAutomata {
         , restrans
         , a1.clocks.map(c=>getClockName(c,1))++a2.clocks.map(c=>getClockName(c,2))
         , resInvariant
-        , a1.initVal ++ a2.initVal)
+        , a1.initVal ++ a2.initVal,
+        (a1.taskPort._1++a2.taskPort._1,a1.taskPort._2++a2.taskPort._2))
 
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
-//      println(res2.show)
       res2
     }
   }
