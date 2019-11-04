@@ -128,15 +128,15 @@ object Uppaal {
       // set false for all variables that do not belong to acts
       var facts = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
       // second part of the edge, from the new committed state
-      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)//executions)
+//      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)//executions)
       // accumulate new committed state
-      committed += (maxloc+1)
+//      committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
-      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
       // new max location number
-      maxloc +=1
+//      maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
 //      if(from==hub.init)
 //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
@@ -187,15 +187,15 @@ object Uppaal {
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,firstUpds & trueActs & falseActs)//u)
         // second part of the edge, from the new committed state
-        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
+//        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
         // committed states accumulated
-        committed += (maxloc+1)
+//        committed += (maxloc+1)
         // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
         // new max location number
-        maxloc +=1
+//        maxloc +=1
         // initialize port variables to true if this edge goes out of the initial location
 //        if(from==hub.init)
 //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
@@ -220,7 +220,7 @@ object Uppaal {
       var newedges = Set[UppaalEdge]()
       var committed = Set[Int]()
       var act2locs = Map[Int,Set[Int]]()
-      var maxloc = hub.sts.max
+//      var maxloc = hub.sts.max
       var initVal:Set[(Var,Expr)] = Set()
 
 //      val (facts,fccons) = collectFirstOf(f3)
@@ -233,19 +233,19 @@ object Uppaal {
         var falseActs = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
         // set to true all variables that capture first_a for a an action in acts
 //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        var firstUpds = Asg(Var("vfirst"+b),Val(1))
+        var firstUpds = if (names.contains(b)) Asg(Var("vfirst"+b),Val(1)) else Noop
         // if in this edge action a happens then reset first of
-        var resetfirsts = if (names.contains(b)) Asg(Var("vfirst"+b),Val(0)) else Noop
+        var resetfirsts = if (names.contains(a)) Asg(Var("vfirst"+b),Val(0)) else Noop
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g, firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
         // second part of the edge, from the new committed state
-        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
+//        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
         // committed states accumulated
-        committed += (maxloc+1)
+//        committed += (maxloc+1)
         // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
         // new max location number
-        maxloc +=1
+//        maxloc +=1
         // initialize port variables to true if this edge goes out of the initial location
         //        if(from==hub.init)
         //          initVal++= names.map(a=>(Var("port"+a),Val(1)))

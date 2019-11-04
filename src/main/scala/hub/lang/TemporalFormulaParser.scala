@@ -19,6 +19,7 @@ object TemporalFormulaParser extends RegexParsers {
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
   val identifier: Parser[String] = """[a-z][a-zA-Z0-9_]*""".r
   val identifierCap: Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+  val deadlock:Parser[StFormula] = """deadlock""".r ^^ {_ => Deadlock}
   val int:Parser[String] = """[0-9]+""".r
 
   def formulas:Parser[List[TemporalFormula]] =
@@ -38,9 +39,10 @@ object TemporalFormulaParser extends RegexParsers {
       case f~None => f}
 
   def simpleStFormula:Parser[StFormula] =
-    """deadlock""".r ^^ { _ => Deadlock} |
+    deadlock |
     """nothing""".r ^^ { _ => Nothing} |
     "not"~>parFormula^^ Not |
+    "not"~>deadlock ^^ Not |
     "not"~>singleStFormula ^^ Not |
     "can"~>parFormula^^ Can |
     "can"~>singleStFormula ^^ Can |
