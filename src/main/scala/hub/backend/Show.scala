@@ -43,13 +43,15 @@ object Show {
     case EA(sf) => "E[] " + apply(sf)
     case EE(sf) => "E<> " + apply(sf)
     case Eventually(f1,f2) => apply(f1) + " --> " + apply(f2)
-    case Until(f1,f2) => apply(f1) + " until " + apply(f2)
+//    case Until(f1,f2) => apply(f1) + " until " + apply(f2)
   }
 
   def apply(f: StFormula):String = f match {
     case Deadlock => "deadlock"
+    case Nothing=> "nothing"
     case TFTrue => "true"
     case Action(a) => a
+    case DoingAction(a) => "doing " + a
     case DGuard(g) => apply(g)
     case CGuard(g) => ifta.backend.Show(g)
     case Can(f1) => "can ("+apply(f1)+")"
@@ -58,6 +60,7 @@ object Show {
     case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
     case Before(f1,f2) => apply(f1) + " before " + apply(f2)
+    case Until(f1,f2) => apply(f1) + " until " + apply(f2)
   }
 
   def apply(f:UppaalFormula): String = f match {
@@ -68,17 +71,22 @@ object Show {
     case UEventually(f1,f2) => apply(f1) + " --> " + apply(f2)
   }
 
-  def apply(f: UppaalStFormula):String = f match {
+  def apply(f: UppaalStFormula):String = Simplify(f) match {
     case UDeadlock => "deadlock"
     case UTrue => "true"
     case Location(l) => l
     case UDGuard(g) => showUppaalGuard(g)
     case UCGuard(g) => ifta.backend.Show(g)
     case UNot(f1) => "not("+ apply(f1) + ")"
-    case UAnd(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
-    case UOr(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
-    case UImply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
+    case UAnd(f1,f2) => parShow(f1) + " and " + parShow(f2)
+    case UOr(f1,f2) =>  parShow(f1) + " or " + parShow(f2)
+    case UImply(f1,f2) => parShow(f1) + " imply " + parShow(f2)
   }
+  private def parShow(f: UppaalStFormula): String = f match {
+    case UDeadlock | UTrue | UNot(_) => apply(f)
+    case _ => "("+apply(f)+")"
+  }
+
 
   def showUppaalGuard(g:Guard):String = Simplify(g) match {
     case Ltrue => "true"

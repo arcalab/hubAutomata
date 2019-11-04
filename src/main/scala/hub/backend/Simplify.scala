@@ -75,12 +75,14 @@ object Simplify {
     case EA(sf) => EA(apply(sf))
     case EE(sf) => EE(apply(sf))
     case Eventually(f1,f2) => Eventually(apply(f1),apply(f2))
-    case Until(f1,f2) => Until(apply(f1),apply(f2))
+//    case Until(f1,f2) => Until(apply(f1),apply(f2))
   }
 
   def apply(sf: StFormula):StFormula = sf match {
     case Deadlock => Deadlock
+    case Nothing => Nothing
     case a@Action(n) => a
+    case a@DoingAction(n) => a
     case TFTrue => TFTrue
     case DGuard(g)=> DGuard(apply(g))
     case CGuard(c)=> CGuard(ifta.analyse.Simplify(c))
@@ -112,6 +114,9 @@ object Simplify {
     }
     case Before(f1,f2) => (apply(f1),apply(f2)) match {
       case (f3, f4) => Before(f3, f4)
+    }
+    case Until(f1,f2) => (apply(f1),apply(f2)) match {
+      case (f3, f4) => Until(f3, f4)
     }
   }
 

@@ -29,8 +29,8 @@ object TemporalFormulaParser extends RegexParsers {
     "A"~"<>"~>stFormula ^^ AE |
     "E"~"[]"~>stFormula ^^ EA |
     "E"~"<>"~>stFormula ^^ EE |
-    stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)} |
-    stFormula ~"until"~ stFormula ^^ {case f1~_~f2 => Until(f1,f2)}
+    stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)} //|
+//    stFormula ~"until"~ stFormula ^^ {case f1~_~f2 => Until(f1,f2)}
 
   def stFormula:Parser[StFormula] =
     simpleStFormula~opt(boolCond) ^^ {
@@ -38,7 +38,8 @@ object TemporalFormulaParser extends RegexParsers {
       case f~None => f}
 
   def simpleStFormula:Parser[StFormula] =
-    """deadlock""".r ^^ {_ => Deadlock} |
+    """deadlock""".r ^^ { _ => Deadlock} |
+    """nothing""".r ^^ { _ => Nothing} |
     "not"~>parFormula^^ Not |
     "not"~>singleStFormula ^^ Not |
     "can"~>parFormula^^ Can |
@@ -50,14 +51,17 @@ object TemporalFormulaParser extends RegexParsers {
     "("~>stFormula<~")"
 
   def singleStFormula:Parser[StFormula] =
-    identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
-    identifier ^^ Action
+    "@"~>identifier ^^ Action |
+    "doing"~>identifier ^^ DoingAction |
+    identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))}
+
 
   def boolCond:Parser[StFormula => StFormula] =
     "or"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |
     "and"~>stFormula ^^ {f => (f1:StFormula) => And(f1,f)} |
     "imply"~>stFormula ^^ {f => (f1:StFormula) => Imply(f1,f)} |
-    "before"~>stFormula ^^ {f => (f1:StFormula) => Before(f1,f)}
+    "before"~>stFormula ^^ {f => (f1:StFormula) => Before(f1,f)} |
+    "until"~>stFormula ^^ {f => (f1:StFormula) => Until(f1,f)}
 
   def intCond:Parser[String => ClockCons] =
     "<="~>int ^^ {i => (c:String) => LE(c,i.toInt)} |
