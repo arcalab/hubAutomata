@@ -23,7 +23,7 @@ object TemporalFormulaParser extends RegexParsers {
   val int:Parser[String] = """[0-9]+""".r
 
   def formulas:Parser[List[TemporalFormula]] =
-    rep(formula)
+    rep1(formula)
 
   def formula:Parser[TemporalFormula] =
     "A"~"[]"~>stFormula ^^ AA |
@@ -39,20 +39,18 @@ object TemporalFormulaParser extends RegexParsers {
       case f~None => f}
 
   def simpleStFormula:Parser[StFormula] =
-    deadlock |
-    """nothing""".r ^^ { _ => Nothing} |
     "not"~>parFormula^^ Not |
-    "not"~>deadlock ^^ Not |
-    "not"~>singleStFormula ^^ Not |
     "can"~>parFormula^^ Can |
-    "can"~>singleStFormula ^^ Can |
     parFormula |
     singleStFormula
 
   def parFormula:Parser[StFormula] =
-    "("~>stFormula<~")"
+    "("~>stFormula<~")" |
+    singleStFormula
 
   def singleStFormula:Parser[StFormula] =
+    deadlock |
+    """nothing""".r ^^ { _ => Nothing} |
     "@"~>identifier ^^ Action |
     "doing"~>identifier ^^ DoingAction |
     identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))}

@@ -50,7 +50,7 @@ object Show {
     case Deadlock => "deadlock"
     case Nothing=> "nothing"
     case TFTrue => "true"
-    case Action(a) => a
+    case Action(a) => "@"+a
     case DoingAction(a) => "doing " + a
     case DGuard(g) => apply(g)
     case CGuard(g) => ifta.backend.Show(g)
