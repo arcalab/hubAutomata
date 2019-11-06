@@ -15,12 +15,18 @@ sealed trait TemporalFormula {
 //    case _          => false
 //  }
 
+  def hasEvery:Boolean = this match {
+    case EveryAfter(_,_,_) | Every(_,_) => true
+    case _ => false
+  }
+
   def hasUntil:Boolean = this match {
     case AA(f) => f.hasUntil
     case AE(f) => f.hasUntil
     case EA(f) => f.hasUntil
     case EE(f) => f.hasUntil
     case Eventually(f1,f2) => f1.hasUntil || f2.hasUntil
+    case _ => false
 //    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
   }
 
@@ -30,6 +36,7 @@ sealed trait TemporalFormula {
     case EA(f) => f.hasBefore
     case EE(f) => f.hasBefore
     case Eventually(f1,f2) => f1.hasBefore || f2.hasBefore
+    case _ => false
 //    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
   }
 }
@@ -41,6 +48,8 @@ case class EE(f:StFormula) extends TemporalFormula
 case class Eventually(f1:StFormula,f2:StFormula) extends TemporalFormula
 //case class EventuallyBefore(f1: StFormula,f2: StFormula,f3:StFormula) extends TemporalFormula
 //case class Until(f1:StFormula,f2:StFormula) extends TemporalFormula
+case class Every(a:Action,b:Action) extends TemporalFormula
+case class EveryAfter(a:Action,b:Action,t:Int) extends TemporalFormula
 
 
 sealed trait StFormula {

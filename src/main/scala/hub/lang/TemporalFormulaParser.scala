@@ -30,6 +30,10 @@ object TemporalFormulaParser extends RegexParsers {
     "A"~"<>"~>stFormula ^^ AE |
     "E"~"[]"~>stFormula ^^ EA |
     "E"~"<>"~>stFormula ^^ EE |
+    "every"~identifier~ "-->"~identifier~opt("after"~>int) ^^ {
+      case _~a~_~b~Some(t) => EveryAfter(Action(a),Action(b),t.toInt)
+      case _~a~_~b~None => Every(Action(a),Action(b))
+    } |
     stFormula ~"-->"~ stFormula ^^ {case f1~_~f2 => Eventually(f1,f2)} //|
 //    stFormula ~"until"~ stFormula ^^ {case f1~_~f2 => Until(f1,f2)}
 

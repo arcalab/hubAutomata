@@ -44,6 +44,9 @@ object Show {
     case EE(sf) => "E<> " + apply(sf)
     case Eventually(f1,f2) => apply(f1) + " --> " + apply(f2)
 //    case Until(f1,f2) => apply(f1) + " until " + apply(f2)
+    case Every(a,b) => "every "+ a.a + " --> " + b.a
+    case EveryAfter(a,b,t) => "every "+ a.a + " --> " + b.a + " after " + t
+
   }
 
   def apply(f: StFormula):String = f match {
