@@ -22,7 +22,7 @@ import ifta._
 case class Uppaal(locs:Set[Int],init:Int,clocks:Set[String],edges:Set[UppaalEdge],inv:Map[Int,ClockCons],
                   committed:Set[Int],act2locs:Map[Int,Set[Int]],initVal:Map[Var,Expr],name:String) {}
 
-case class UppaalEdge(from:Int,to:Int,ports:Set[Int],ccons:ClockCons,creset:Set[String],guard:Guard,upd:Update) {}
+case class UppaalEdge(from:Int,to:Int,ports:Set[String],ccons:ClockCons,creset:Set[String],guard:Guard,upd:Update) {}
 
 object Uppaal {
 
@@ -55,7 +55,6 @@ object Uppaal {
     * @return a string with the uppaal model (xml)
     */
   def apply(uppaals:Set[Uppaal]):String = {
-
     // all clocks to declare (everything global for now to simplify naming)
     val clocks:Set[String] = uppaals.flatMap(u=>u.clocks)
     // get all variables to declare
@@ -66,7 +65,7 @@ object Uppaal {
     // initialize variables (just ports for now)
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("port"))
     portvars = portvars -- initVars.map(i=>i._1)
-
+    val channels:Set[String] = uppaals.flatMap(u=> u.edges).flatMap(e=>e.ports).filter(p=> p.endsWith("!") || p.endsWith("?"))
     s"""<?xml version="1.0" encoding="utf-8"?>
        |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
        |<nta>
@@ -79,6 +78,7 @@ object Uppaal {
        |
        |${if (initVars.nonEmpty) initVars.map(i => "bool " + Show(Asg(i._1,i._2))).mkString("",";\n",";\n") else ""}
        |// Channels (actions)
+       |${if (channels.nonEmpty) channels.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
        |</declaration>
        |${uppaals.map(mkTemplate).mkString("\n")}
        |<system>
@@ -128,7 +128,7 @@ object Uppaal {
       // set false for all variables that do not belong to acts
       var facts = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
       // second part of the edge, from the new committed state
 //      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)//executions)
       // accumulate new committed state
@@ -157,7 +157,7 @@ object Uppaal {
   def fromFormula(tf:TemporalFormula,hub:HubAutomata):Set[Uppaal] = tf match {
 //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
     case Every(a,b) =>  fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
-//    case EveryAfter(a,b,t) =>
+    case f@EveryAfter(a,b,t) => fromEveryAfter(f,Simplify(hub))
     case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
     case f@Eventually(f1, Until(f2,f3)) =>
         throw new FormulaException("Only an action is supported on the left and right side of an eventually until clause")
@@ -188,11 +188,13 @@ object Uppaal {
         var falseActs = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
         // set to true all variables that capture first_a for a an action in acts
         //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        var firstUpds = if (names.contains(b.a)) Asg(Var("vfirst"+b),Val(1)) else Noop
-        // if in this edge action a happens then reset first of
-        var resetfirsts = if (names.contains(a.a)) Asg(Var("vfirst"+b),Val(0)) else Noop
+        var firstUpds = if (names.contains(b.a)) Asg(Var("vfirst"+b.a),Val(1)) else Noop
+        // if in this edge action a happens then reset first of b and clock cons t
+        val (resetfirsts,resetSignal) = if (names.contains(a.a)) (Asg(Var("vfirst"+b.a),Val(0)),Set("reset"+cc2Name(GE(a.a,t))+"!")) else (Noop,Set())
+
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a))++resetSignal,
+          cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
         // second part of the edge, from the new committed state
         //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
         // committed states accumulated
@@ -207,14 +209,14 @@ object Uppaal {
       }
       val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
+      //observer automaton for each clock constraint that needs to be track when is first satisfied
+      val observer:Uppaal = mkObserver(GE(a.a,t),true)
+
       // main uppaal automaton for the hub
       val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
 
-      //observer automaton for each clock constraint that needs to be track when is first satisfied
-      val observer:Uppaal = mkObserver(GE(a+".t",t))
-
       //      observers+hubAut
-      Set(hubAut)
+      Set(hubAut,observer)
   }
 
   private def fromUntil(f:Until,hub:HubAutomata):Set[Uppaal] =  f match {
@@ -238,7 +240,7 @@ object Uppaal {
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,firstUpds & trueActs & falseActs)//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
         // committed states accumulated
@@ -253,13 +255,11 @@ object Uppaal {
       }
       val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
-
+      //observer automaton for each clock constraint that needs to be track when is first satisfied
+      val observers:Set[Uppaal] = fccons.map(cc=> mkObserver(cc))
 
       // main uppaal automaton for the hub
       val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
-
-      //observer automaton for each clock constraint that needs to be track when is first satisfied
-      val observers:Set[Uppaal] = fccons.map(mkObserver)
 
       observers+hubAut
   }
@@ -290,7 +290,7 @@ object Uppaal {
         var resetfirsts = if (names.contains(a)) Asg(Var("vfirst"+b),Val(0)) else Noop
         println("resetFirst: "+ resetfirsts)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts,cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
+        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
         // committed states accumulated
@@ -347,7 +347,7 @@ object Uppaal {
           }).foldRight[Update](Noop)(_&_)
         }
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,acts,cc,cr,g,tacts & facts)//u)
+        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts)//u)
         // second part of the edge
         newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
         // accumulate committed states
@@ -371,7 +371,7 @@ object Uppaal {
     * @param cc clock constraint of the form >= or ==
     * @return and uppaal automaton
     */
-  private def mkObserver(cc:ClockCons):Uppaal = {
+  private def mkObserver(cc:ClockCons,withReset:Boolean=false):Uppaal = {
     // invariant constraint for the initial state of the observer
     val invCC:ClockCons = cc match {
       case GE(c,n) => LE(c,n)
@@ -380,10 +380,16 @@ object Uppaal {
     }
     // variable name for the clock constraint and the observer
     val ccname = cc2Name(cc)
-    // edge for the observer
-    val edge:UppaalEdge = UppaalEdge(0,1,Set(),cc,Set(),Ltrue,Asg(Var(ccname),Val(1)))
+    // edges for the observer
+    var edges:Set[UppaalEdge] = Set(UppaalEdge(0,1,Set(),cc,Set(),Ltrue,Asg(Var(ccname),Val(1))))
+
+    if (withReset) {
+      edges += UppaalEdge(0,0,Set("reset"+ccname+"?"),CTrue,Set(),Ltrue,Noop)
+      edges += UppaalEdge(1,1,Set("reset"+ccname+"?"),CTrue,Set(),Ltrue,Asg(Var(ccname),Val(0)))
+    }
+
     // observer
-    Uppaal(Set(0,1),0,cc.clocks.toSet,Set(edge),Map(0->invCC),Set(),Map(),Map(),"Observer"+ccname)
+    Uppaal(Set(0,1),0,cc.clocks.toSet,edges,Map(0->invCC),Set(),Map(),Map(),"Observer"+ccname)
   }
 
   /**
@@ -462,7 +468,7 @@ object Uppaal {
       case EA(sf) => UEA(stf2UStF(sf))
       case EE(sf) => UEE(stf2UStF(sf))
       case Every(a,b)=> UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
-      case EveryAfter(a,b,t) => UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GT(a+".t",t))))),stf2UStF(Not(a))))
+      case EveryAfter(a,b,t) => UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GE(a.a,t))))),stf2UStF(Not(a))))
       case Eventually(Action(a), Before(f1,f2)) => UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2)))
       case Eventually(Action(a), Until(f1,Action(b))) => UEventually(stf2UStF(Action(a)),UImply(UNot(mkFirstOf(Action(b))),stf2UStF(f1)))
       case Eventually(f1, f2) if f1.hasUntil || f2.hasUntil => throw new RuntimeException("Until clauses inside eventually clause can have the form a --> f until b")
@@ -488,7 +494,6 @@ object Uppaal {
       case DoingAction(a) => throw new FormulaException("Cannot make a firstTime clause of a Doing an action clause.")
       case Until(f1,f2)   => throw new FormulaException("Cannot make a firstTime clause of a Until clause.")
       case Before(f1,f2)  => throw new FormulaException("Cannot make a firstTime clause of a Before clause.")
-
     }
 
     def stf2UStF(st: StFormula): UppaalStFormula = st match {
@@ -632,10 +637,18 @@ object Uppaal {
     s"""<transition>
        |<source ref="id${e.from}"/>
        |<target ref="id${e.to}"/>
-       |${if (e.ccons==CTrue /*&& e.guard==LTrue*/) "" else mkGuard(e.from,e.ccons,e.guard)}""".stripMargin +
-       //|${mkActLabel(e)}
-       s"""|${mkEdgeUpd(e)}
+       |${if (e.ccons==CTrue /*&& e.guard==LTrue*/) "" else mkGuard(e.from,e.ccons,e.guard)}
+       |${mkActLabel(e)}
+       |${mkEdgeUpd(e)}
        |</transition>""".stripMargin
+  }
+
+  private def mkActLabel(e: UppaalEdge):String = {
+    val syncChannel = e.ports.find(p=> p.endsWith("!")|| p.endsWith("?"))
+    if (syncChannel.isDefined)
+      s"""<label kind="synchronisation" x="${e.from * 100 + 15}" y="-34">${syncChannel.get}</label>"""
+    else ""
+//    else s"""<label kind="comments" x="${e.from * 100 + 15}" y="-34">${e.act}</label>"""
   }
 
   private def mkEdgeUpd(e:UppaalEdge):String = {
