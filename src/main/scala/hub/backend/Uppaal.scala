@@ -62,6 +62,7 @@ object Uppaal {
     // ignore for know other variables that were not created for verification purposes
     var vvars:Set[Var] = vars.filter(v=>v.name.startsWith("v"))
     var portvars:Set[Var] = vars.filter(v=>v.name.startsWith("port"))
+    var intvars:Set[Var] = vars.filter(v=>v.name.startsWith("int"))
     // initialize variables (just ports for now)
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("port"))
     portvars = portvars -- initVars.map(i=>i._1)
@@ -74,7 +75,7 @@ object Uppaal {
        |// clocks:
        |${if (clocks.nonEmpty) clocks.mkString("clock ", ",", ";") else ""}
        |// variables:
-       |${mkVariables(vvars++portvars)}
+       |${mkVariables(vvars++portvars++intvars)}
        |
        |${if (initVars.nonEmpty) initVars.map(i => "bool " + Show(Asg(i._1,i._2))).mkString("",";\n",";\n") else ""}
        |// Channels (actions)
@@ -156,8 +157,8 @@ object Uppaal {
     */
   def fromFormula(tf:TemporalFormula,hub:HubAutomata):Set[Uppaal] = tf match {
 //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-    case Every(a,b) =>  fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
-    case f@EveryAfter(a,b,t) => fromEveryAfter(f,Simplify(hub))
+    case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
+    case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
     case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
     case f@Eventually(f1, Until(f2,f3)) =>
         throw new FormulaException("Only an action is supported on the left and right side of an eventually until clause")
@@ -165,59 +166,104 @@ object Uppaal {
     case f@Eventually(f1,Before(f2,f3)) =>
       throw new FormulaException("Only an action is supported on the left side of an eventually before clause")
     case formula => Set(mkTimeAutomata(Simplify(hub)))
-
   }
 
-  private def fromEveryAfter(f:EveryAfter,hub:HubAutomata):Set[Uppaal] = f match {
-    case EveryAfter(a, b, t) =>
+  private def fromEvery(pre:Action,post:Action,hub:HubAutomata):Uppaal = {
       val hubedges = hub.getTransitions
 
       var newedges = Set[UppaalEdge]()
       var committed = Set[Int]()
       var act2locs = Map[Int,Set[Int]]()
-      //      var maxloc = hub.sts.max
+      var maxloc = hub.sts.max
       var initVal:Set[(Var,Expr)] = Set()
 
-      //      val (facts,fccons) = collectFirstOf(f3)
-
       for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
-        var names = acts.map(hub.getPortName)
-        // set all true to all variables named as the actions (to keep track of when an action fire)
-        var trueActs = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var names:Set[String] = acts.map(hub.getPortName)
+        // set true to all variables named as the actions (to keep track of when an action fire)
+        var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
         // set false for all variables that do not belong to acts
-        var falseActs = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
-        // set to true all variables that capture first_a for a an action in acts
-        //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        var firstUpds = if (names.contains(b.a)) Asg(Var("vfirst"+b.a),Val(1)) else Noop
-        // if in this edge action a happens then reset first of b and clock cons t
-        val (resetfirsts,resetSignal) = if (names.contains(a.a)) (Asg(Var("vfirst"+b.a),Val(0)),Set("reset"+cc2Name(GE(a.a,t))+"!")) else (Noop,Set())
-
-        // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a))++resetSignal,
-          cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
-        // second part of the edge, from the new committed state
-        //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
-        // committed states accumulated
-        //        committed += (maxloc+1)
-        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-        //        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
-        // new max location number
-        //        maxloc +=1
-        // initialize port variables to true if this edge goes out of the initial location
-        //        if(from==hub.init)
-        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
+        var facts = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+        // experimenting with setting if an action executed before another action executes
+        var executions:Update = Noop
+        val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.a).get
+        val postPort = hub.ports.find(a=> hub.getPortName(a)== post.a).get
+        (names.contains(pre.a),names.contains(post.a)) match {
+          case (true,false) =>
+            executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
+          case (false,true) =>
+            executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
+          case _=> ()
+        }
+        // first part of the edge
+//        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts)//u)
+        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
+//        // second part of the edge
+//        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
+//        // accumulate committed states
+//        committed += (maxloc+1)
+//        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
+//        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//        // new max location
+//        maxloc +=1
+//        // initialize port variables to true if this edge goes out of the initial location
+//        //        if(from==hub.init)
+//        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
       val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
 
-      //observer automaton for each clock constraint that needs to be track when is first satisfied
-      val observer:Uppaal = mkObserver(GE(a.a,t),true)
-
-      // main uppaal automaton for the hub
-      val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
-
-      //      observers+hubAut
-      Set(hubAut,observer)
+      Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
   }
+
+//  private def fromEveryAfter(f:EveryAfter,hub:HubAutomata):Set[Uppaal] = f match {
+//    case EveryAfter(a, b, t) =>
+//      val hubedges = hub.getTransitions
+//
+//      var newedges = Set[UppaalEdge]()
+//      var committed = Set[Int]()
+//      var act2locs = Map[Int,Set[Int]]()
+//      //      var maxloc = hub.sts.max
+//      var initVal:Set[(Var,Expr)] = Set()
+//
+//      //      val (facts,fccons) = collectFirstOf(f3)
+//
+//      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+//        var names = acts.map(hub.getPortName)
+//        // set all true to all variables named as the actions (to keep track of when an action fire)
+//        var trueActs = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+//        // set false for all variables that do not belong to acts
+//        var falseActs = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+//        // set to true all variables that capture first_a for a an action in acts
+//        //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
+//        var firstUpds = if (names.contains(b.a)) Asg(Var("vfirst"+b.a),Val(1)) else Noop
+//        // if in this edge action a happens then reset first of b and clock cons t
+//        val (resetfirsts,resetSignal) = if (names.contains(a.a)) (Asg(Var("vfirst"+b.a),Val(0)),Set("reset"+cc2Name(GE(a.a,t))+"!")) else (Noop,Set())
+//
+//        // first part of the edge, to a new committed state
+//        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a))++resetSignal,
+//          cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
+//        // second part of the edge, from the new committed state
+//        //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
+//        // committed states accumulated
+//        //        committed += (maxloc+1)
+//        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
+//        //        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//        // new max location number
+//        //        maxloc +=1
+//        // initialize port variables to true if this edge goes out of the initial location
+//        //        if(from==hub.init)
+//        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//      }
+//      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+//
+//      //observer automaton for each clock constraint that needs to be track when is first satisfied
+//      val observer:Uppaal = mkObserver(GE(a.a,t),true)
+//
+//      // main uppaal automaton for the hub
+//      val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
+//
+//      //      observers+hubAut
+//      Set(hubAut,observer)
+//  }
 
   private def fromUntil(f:Until,hub:HubAutomata):Set[Uppaal] =  f match {
     case Until(f1,f2) =>
@@ -285,10 +331,10 @@ object Uppaal {
         // set to true all variables that capture first_a for a an action in acts
 //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
         var firstUpds = if (names.contains(b)) Asg(Var("vfirst"+b),Val(1)) else Noop
-        println("firstUps: "+ firstUpds)
+//        println("firstUps: "+ firstUpds)
         // if in this edge action a happens then reset first of
         var resetfirsts = if (names.contains(a)) Asg(Var("vfirst"+b),Val(0)) else Noop
-        println("resetFirst: "+ resetfirsts)
+//        println("resetFirst: "+ resetfirsts)
         // first part of the edge, to a new committed state
         newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
         // second part of the edge, from the new committed state
@@ -385,7 +431,7 @@ object Uppaal {
 
     if (withReset) {
       edges += UppaalEdge(0,0,Set("reset"+ccname+"?"),CTrue,Set(),Ltrue,Noop)
-      edges += UppaalEdge(1,1,Set("reset"+ccname+"?"),CTrue,Set(),Ltrue,Asg(Var(ccname),Val(0)))
+      edges += UppaalEdge(1,0,Set("reset"+ccname+"?"),CTrue,Set(),Ltrue,Asg(Var(ccname),Val(0)))
     }
 
     // observer
@@ -467,8 +513,16 @@ object Uppaal {
       case AE(sf) => UAE(stf2UStF(sf))
       case EA(sf) => UEA(stf2UStF(sf))
       case EE(sf) => UEE(stf2UStF(sf))
-      case Every(a,b)=> UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
-      case EveryAfter(a,b,t) => UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GE(a.a,t))))),stf2UStF(Not(a))))
+      case Every(a,b)=>
+        UEventually(stf2UStF(DoingAction(a.a)),UImply(stf2UStF(b),UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0))))))
+        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)))
+      //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
+      case EveryAfter(a,b,t) =>
+        UEventually(stf2UStF(DoingAction(a.a)),UImply(stf2UStF(b),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),UNot(UCGuard(LT("t"+act2port(a.a),t))))))
+        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
+//         UEventually(stf2UStF(a),UNot(UAnd(UDGuard(Pred(">",List(Var("int"+portToString(act2port(a))+"_"+portToString(act2port(b))),Val(1)))),stf2UStF(a))))
+//        UEventually(stf2UStF(a),UAnd(UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))),UCGuard(GE(a.a,t))))
+        //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GE(a.a,t))))),stf2UStF(Not(a))))
       case Eventually(Action(a), Before(f1,f2)) => UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2)))
       case Eventually(Action(a), Until(f1,Action(b))) => UEventually(stf2UStF(Action(a)),UImply(UNot(mkFirstOf(Action(b))),stf2UStF(f1)))
       case Eventually(f1, f2) if f1.hasUntil || f2.hasUntil => throw new RuntimeException("Until clauses inside eventually clause can have the form a --> f until b")
@@ -603,13 +657,18 @@ object Uppaal {
     // for now only auxiliary variables to verify things like a doesn't executes more than once before b
     // ignore other variables for now
     vs = vs.filter(v=>v.name.startsWith("v"))
+    val invs = vs.filter(v=>v.name.startsWith("int"))
     //if (vs.nonEmpty) "int[0,2] "+vs.map(Show(_)).mkString("",",",";") else ""
-    if (vs.nonEmpty) "bool "+vs.map(Show(_)).mkString("",",",";") else ""
+    if (vs.nonEmpty) "bool "+vs.map(Show(_)).mkString("",",",";\n") else ""
+    if (invs.nonEmpty) "int[0,2] "+invs.map(Show(_)).mkString("",",",";\n") else ""
   }
 
   private def mkVariables(vars: Set[Var]):String = {
     // all booleans for know
-    if (vars.nonEmpty) "bool "+vars.map(Show(_)).mkString("",",",";") else ""
+    val boolvs = vars.filterNot(v=>v.name.startsWith("int"))
+    val intvs = vars.filter(v=>v.name.startsWith("int"))
+    (if (boolvs.nonEmpty) "bool "+boolvs.map(Show(_)).mkString("",",",";\n") else "") +
+      (if (intvs.nonEmpty) "int[0,2] "+intvs.map(Show(_)).mkString("",",",";\n") else "")
   }
 
   private def mkLocation(loc:Int,inv:ClockCons,committed:Boolean):String = {

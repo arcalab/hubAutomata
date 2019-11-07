@@ -21,8 +21,8 @@ object Show {
     case Var(n,v) => n
     case Val(d) => d.toString
     case Cons(n,v) => n
-    case Fun(name,a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") =>
-      apply(a1)+s" $name "+apply(a2) // parenthesis?
+    case Fun(name,a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") || Set("<=","<","==",">",">=","+","-","&lt;?","&gt;?").contains(name) =>
+      "("+apply(a1)+s" $name "+apply(a2)+")" // parenthesis?
     case Fun(name,args) => s"$name(${args.map(apply).mkString(",")})"
   }
 
@@ -32,8 +32,8 @@ object Show {
     case LOr(g1, g2) => apply(g1) + " | " + apply(g2)
     case LAnd(g1, g2) => apply(g1) + " & " + apply(g2)
     case LNot(g) => s"¬(${apply(g)})"
-    case Pred(name, a1::a2::Nil) if name.matches("[^a-zA-Z0-9]") =>
-      apply(a1)+name+apply(a2)
+    case Pred(name, a1::a2::Nil) if name.matches("[^a-zA-Z0-9]*") =>
+      "("+apply(a1)+name+apply(a2)+")"
     case Pred(name,param) => s"$name(${param.map(apply).mkString(",")})"
   }
 
@@ -97,9 +97,10 @@ object Show {
     case LOr(g1, g2) => showUppaalGuard(g1) + " || " + showUppaalGuard(g2)
     case LAnd(g1, g2) => showUppaalGuard(g1) + "  && " + showUppaalGuard(g2)
     case LNot(g) => s"!(${showUppaalGuard(g)})"
-    case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-").contains(name) =>
-      apply(a1)+name+apply(a2)
-    case Pred(name,param) => s"$name(${param.map(apply(_)).mkString(",")})"
+    case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-","&lt;?","&gt;?").contains(name) =>
+      "("+apply(a1)+name+apply(a2)+")"
+    case Pred(name,param) =>
+      s"$name(${param.map(apply(_)).mkString(",")})"
   }
 
 }
