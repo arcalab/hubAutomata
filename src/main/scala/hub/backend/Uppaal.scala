@@ -228,16 +228,16 @@ object Uppaal {
           case _=> ()
         }
         // first part of the edge
-//        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts)//u)
-        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
+        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts)//u)
+//        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
-//        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
+        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
 //        // accumulate committed states
-//        committed += (maxloc+1)
+        committed += (maxloc+1)
 //        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-//        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
 //        // new max location
-//        maxloc +=1
+        maxloc +=1
 //        // initialize port variables to true if this edge goes out of the initial location
 //        //        if(from==hub.init)
 //        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
@@ -547,11 +547,25 @@ object Uppaal {
       case EA(sf) => UEA(stf2UStF(sf))
       case EE(sf) => UEE(stf2UStF(sf))
       case Every(a,b)=>
-        UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0))))))
+        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.a, Set()).map(l => Location("Hub.L" + portToString(l)))
+        var res:UppaalStFormula = UTrue
+        if (locsOfB.nonEmpty) {
+          res = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          res = UImply(res,UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(1)))))
+        } else throw new RuntimeException("Action name not found: " + b)
+        UAA(res)
+        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0))))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)))
       //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
       case EveryAfter(a,b,t) =>
-        UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),UNot(UCGuard(LT("t"+act2port(a.a),t))))))
+        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.a, Set()).map(l => Location("Hub.L" + portToString(l)))
+        var res:UppaalStFormula = UTrue
+        if (locsOfB.nonEmpty) {
+          res = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          res = UImply(res,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
+        } else throw new RuntimeException("Action name not found: " + b)
+        UAA(res)
+        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),UNot(UCGuard(LT("t"+act2port(a.a),t))))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
 //         UEventually(stf2UStF(a),UNot(UAnd(UDGuard(Pred(">",List(Var("int"+portToString(act2port(a))+"_"+portToString(act2port(b))),Val(1)))),stf2UStF(a))))
 //        UEventually(stf2UStF(a),UAnd(UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))),UCGuard(GE(a.a,t))))
