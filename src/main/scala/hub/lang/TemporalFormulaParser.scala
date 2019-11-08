@@ -45,8 +45,8 @@ object TemporalFormulaParser extends RegexParsers {
   def simpleStFormula:Parser[StFormula] =
     "not"~>parFormula^^ Not |
     "can"~>parFormula^^ Can |
-    parFormula |
-    singleStFormula
+    parFormula //|
+//    singleStFormula
 
   def parFormula:Parser[StFormula] =
     "("~>stFormula<~")" |
@@ -55,10 +55,16 @@ object TemporalFormulaParser extends RegexParsers {
   def singleStFormula:Parser[StFormula] =
     deadlock |
     """nothing""".r ^^ { _ => Nothing} |
-    "@"~>identifier ^^ Action |
     "doing"~>identifier ^^ DoingAction |
-    identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))}
+    identifier~"waits"~waitMode~int ^^ {case id~_~mode~t => Waits(Action(id),mode,t.toInt)} |
+    identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
+    identifier ^^ Action
 
+  def waitMode:Parser[WaitMode] =
+    "atLeast".r ^^ {_ => AtLeast}  |
+    "atMost".r  ^^ {_ => AtMost}  |
+    "notMoreThan".r ^^ {_ => NotMoreThan} |
+    "notLessThan".r ^^ {_ => NotLessThan}
 
   def boolCond:Parser[StFormula => StFormula] =
     "or"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |

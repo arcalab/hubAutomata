@@ -119,6 +119,7 @@ object Simplify {
     case Until(f1,f2) => (apply(f1),apply(f2)) match {
       case (f3, f4) => Until(f3, f4)
     }
+    case Waits(a,m,t) => sf
   }
 
   def apply(f:UppaalFormula):UppaalFormula = f match {

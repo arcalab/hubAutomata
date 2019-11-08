@@ -64,6 +64,14 @@ object Show {
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
     case Before(f1,f2) => apply(f1) + " before " + apply(f2)
     case Until(f1,f2) => apply(f1) + " until " + apply(f2)
+    case Waits(a,mode,t) => apply(a) + " waits " + apply(mode) + " " + t
+  }
+
+  def apply(mode: WaitMode):String = mode match {
+    case AtLeast => "atLeast"
+    case AtMost => "atMost"
+    case NotMoreThan => "notMoreThan"
+    case NotLessThan => "notLessThan"
   }
 
   def apply(f:UppaalFormula): String = f match {

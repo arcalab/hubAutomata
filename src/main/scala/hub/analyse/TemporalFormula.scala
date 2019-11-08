@@ -15,6 +15,17 @@ sealed trait TemporalFormula {
 //    case _          => false
 //  }
 
+  def isComplex:Boolean = this.hasEvery || this.hasUntil || this.hasBefore || this.hasWaits
+
+  def hasWaits:Boolean = this match {
+    case AA(f) => f.hasWaits
+    case AE(f) => f.hasWaits
+    case EA(f) => f.hasWaits
+    case EE(f) => f.hasWaits
+    case Eventually(f1,f2) => f1.hasWaits || f2.hasWaits
+    case _ => false
+  }
+
   def hasEvery:Boolean = this match {
     case EveryAfter(_,_,_) | Every(_,_) => true
     case _ => false
@@ -75,6 +86,15 @@ sealed trait StFormula {
     case Not(f1)        => f1.hasBefore
     case _              => false
   }
+
+  def hasWaits:Boolean = this match {
+    case Waits(a,m,t) => true
+    case And(f1,f2)     => f1.hasWaits || f2.hasWaits
+    case Or(f1,f2)      => f1.hasWaits || f2.hasWaits
+    case Imply(f1,f2)   => f1.hasWaits || f2.hasWaits
+    case Not(f1)        => f1.hasWaits
+    case _              => false
+  }
 }
 
 case object Deadlock                        extends StFormula
@@ -90,5 +110,15 @@ case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula
 case class Imply(f1:StFormula,f2:StFormula) extends StFormula
 
+case class Waits(a:Action,mod:WaitMode,t:Int) extends StFormula
+
 case class Until(f1:StFormula,f2:StFormula) extends StFormula
 case class Before(f1:StFormula,f2:StFormula)extends StFormula
+
+
+sealed trait WaitMode
+
+case object AtLeast     extends WaitMode
+case object AtMost      extends WaitMode
+case object NotMoreThan extends WaitMode
+case object NotLessThan extends WaitMode
