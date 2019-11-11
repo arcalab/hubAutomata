@@ -11,8 +11,6 @@ import ifta.ClockCons
 sealed trait UppaalFormula
 
 
-case class UComposed(formulas:List[UppaalFormula]) extends UppaalFormula
-
 case class UAA(f:UppaalStFormula) extends UppaalFormula
 case class UAE(f:UppaalStFormula) extends UppaalFormula
 case class UEA(f:UppaalStFormula) extends UppaalFormula

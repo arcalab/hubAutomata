@@ -128,7 +128,6 @@ object Simplify {
     case UEA(sf) => UEA(apply(sf))
     case UEE(sf) => UEE(apply(sf))
     case UEventually(f1,f2) => UEventually(apply(f1),apply(f2))
-    case UComposed(fs) => UComposed(fs.map(apply))
   }
 
   def apply(sf: UppaalStFormula):UppaalStFormula = sf match {

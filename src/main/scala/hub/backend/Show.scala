@@ -80,7 +80,6 @@ object Show {
     case UEA(sf) => "E[] " + apply(sf)
     case UEE(sf) => "E<> " + apply(sf)
     case UEventually(f1,f2) => apply(f1) + " --> " + apply(f2)
-    case UComposed(fs) => fs.map(apply).mkString("\n")
   }
 
   def apply(f: UppaalStFormula):String = Simplify(f) match {

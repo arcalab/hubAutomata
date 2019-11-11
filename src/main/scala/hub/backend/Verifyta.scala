@@ -70,12 +70,6 @@ object Verifyta {
     // get a map from port number to shown name (from hub)
     val interfaces:Map[Int,String] = (hub.getInputs ++ hub.getOutputs).map(p=>p->hub.getPortName(p)).toMap
 
-//    // create an uppaal model for simple formulas
-//    val ta = Set(Uppaal.mkTimeAutomata(hub))
-//
-//    // map each formula to a custom network of TA to verify such formula (simple formulas are maped to the same based TA
-//    val formulas2nta:List[(TemporalFormula,Set[Uppaal])] =
-//      formulas.map(f => if (f.isComplex) (f,Uppaal.fromFormula(f,hub)) else  (f,ta))
     // map each formula to its uppaal model
     val f2model = formulas.map(f=> f -> Uppaal.fromFormula(f,hub))
 
@@ -89,20 +83,21 @@ object Verifyta {
         f._2.flatMap(ta=>ta.act2locs.map(a=> interfaces(a._1)->a._2)).toMap, interfaces.map(i => i._2->i._1),f._3),
         f._2))
 
-//    // simplify formulas and convert them to a string suitable for uppaal
-//    val formulasStr: List[(TemporalFormula,List[String],String)] =
-//      formula2nta2uf.map(f => (f._1,f._2.map(uf => Show(Simplify(uf))),Uppaal(f._3)))
-
-    // group formulas by model
-//    val formulasByModel:List[(Set[Uppaal],List[(TemporalFormula,List[UppaalFormula],Set[Uppaal])])] = formula2nta2uf.groupBy(_._3).toList
-    //    val orderedFormulasStr:List[(String,List[(TemporalFormula,String,String)])] = formulasStr.groupBy(_._3).toList
-
-
+    // create call and map it to the corresponding temporal formula
     (for ((tf,ufs,um) <- f2uf) yield {
       tf -> VerifytaCall(um,ufs)
     }).toMap
   }
 
+  /**
+    * Match the responses from multiple calls to verifyta
+    *
+    * @param responses appended responses from multiple call
+    * @param calls call made for each call response
+    * @return a map from a temporal formula to either:
+    *         an error from verifyta, or
+    *         the list of responses for each formula in the call
+    */
   def matchResults(responses:String,calls:List[VerifytaCall]):Map[String,Either[String,List[String]]] = {
     // get groups of calls to verifyta (formulas, response)
     val f2res:List[(String,String)] = parseMultipleVerifyta(responses)
@@ -115,8 +110,7 @@ object Verifyta {
 
 /**
   * Necesary information for a verifyta call
-  * Each call corresponds to a model and a list of formulas for such model
-  * The call has information of which temporal formula corresponds to which uppaal formulas
+  * Each call corresponds to a model and a list of formulas to verify for that model
   *
   * @param um
   * @param uf
