@@ -50,6 +50,16 @@ sealed trait TemporalFormula {
     case _ => false
 //    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
   }
+
+  def actions:Set[String] = this match {
+    case AA(f) => f.actions
+    case AE(f) => f.actions
+    case EA(f) => f.actions
+    case EE(f) => f.actions
+    case Eventually(f1,f2) => f1.actions ++ f2.actions
+    case Every(a,b) => Set(a.name,b.name)
+    case EveryAfter(a,b,t) => Set(a.name,b.name)
+  }
 }
 
 case class AA(f:StFormula) extends TemporalFormula
@@ -95,6 +105,22 @@ sealed trait StFormula {
     case Not(f1)        => f1.hasWaits
     case _              => false
   }
+
+  def actions:Set[String] = this match {
+    case Action(name) => Set(name)
+    case DoingAction(a) => Set(a)
+    case Can(f) => f.actions
+    case Not(f) => f.actions
+    case And(f1,f2) => f1.actions++f2.actions
+    case Or(f1,f2) => f1.actions++f2.actions
+    case Imply(f1,f2) => f1.actions++f2.actions
+    case Waits(a,m,t) => Set(a.name)
+    case Until(f1,f2) => f1.actions++f2.actions
+    case Before(f1,f2) => f1.actions++f2.actions
+    case CGuard(cc) => cc.clocks.filter(_.endsWith(".t")).map(_.dropRight(2)).toSet
+    case _ => Set()
+
+  }
 }
 
 case object Deadlock                        extends StFormula
@@ -102,7 +128,7 @@ case object Nothing                         extends StFormula
 case object TFTrue                          extends StFormula
 case class DGuard(g:Guard)                  extends StFormula
 case class CGuard(c:ClockCons)              extends StFormula
-case class Action(a:String)                 extends StFormula
+case class Action(name: String)             extends StFormula
 case class DoingAction(a:String)            extends StFormula
 case class Can(f:StFormula)                 extends StFormula
 case class Not(f:StFormula)                 extends StFormula

@@ -155,18 +155,28 @@ object Uppaal {
     * @param hub hub automaton from which to create the model
     * @return Uppaal model
     */
-  def fromFormula(tf:TemporalFormula,hub:HubAutomata):Set[Uppaal] = tf match {
-//    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-    case f if f.hasWaits => Set(mkWithCommitted(Simplify(hub)))
-    case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
-    case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
-    case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
-    case f@Eventually(f1, Until(f2,f3)) =>
-        throw new FormulaException("Only an action is supported on the left and right side of an eventually until clause")
-    case f@Eventually(Action(name),Before(f2,f3)) => Set(fromEventuallyBefore(f,Simplify(hub)))
-    case f@Eventually(f1,Before(f2,f3)) =>
-      throw new FormulaException("Only an action is supported on the left side of an eventually before clause")
-    case formula => Set(mkTimeAutomata(Simplify(hub)))
+  def fromFormula(tf:TemporalFormula,hub:HubAutomata):Set[Uppaal] = {
+    if (validFormula(tf,hub))
+      tf match {
+    //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
+      case f if f.hasWaits => Set(mkWithCommitted(Simplify(hub)))
+      case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
+      case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
+      case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
+      case f@Eventually(f1, Until(f2,f3)) =>
+          throw new FormulaException("Only an action is supported on the left and right side of an eventually until clause")
+      case f@Eventually(Action(name),Before(f2,f3)) => Set(fromEventuallyBefore(f,Simplify(hub)))
+      case f@Eventually(f1,Before(f2,f3)) =>
+        throw new FormulaException("Only an action is supported on the left side of an eventually before clause")
+      case formula => Set(mkTimeAutomata(Simplify(hub)))
+    }
+    else throw new FormulaException("Unkown action names in formula "+ Show(tf))
+  }
+
+  private def validFormula(tf:TemporalFormula,hub:HubAutomata):Boolean = {
+    var hubPorts = hub.ports.map(hub.getPortName(_))
+    tf.actions.forall(a => hubPorts.contains(a))
+
   }
 
   private def mkWithCommitted(hub:HubAutomata):Uppaal = {
@@ -218,9 +228,9 @@ object Uppaal {
         var facts = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
         // experimenting with setting if an action executed before another action executes
         var executions:Update = Noop
-        val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.a).get
-        val postPort = hub.ports.find(a=> hub.getPortName(a)== post.a).get
-        (names.contains(pre.a),names.contains(post.a)) match {
+        val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.name).get
+        val postPort = hub.ports.find(a=> hub.getPortName(a)== post.name).get
+        (names.contains(pre.name),names.contains(post.name)) match {
           case (true,false) =>
             executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
           case (false,true) =>
@@ -540,41 +550,41 @@ object Uppaal {
     * @param act2port a map from an action name to the corresponding int port number
     * @return a temporal logic suitable for uppaal
     */
-  def toUppaalFormula(formula:TemporalFormula, act2locs:Map[String,Set[Int]], act2port:Map[String,Int],initState:Int=0):UppaalFormula = {
-    def tf2UF(tf: TemporalFormula): UppaalFormula = tf match {
-      case AA(sf) => UAA(stf2UStF(sf))
-      case AE(sf) => UAE(stf2UStF(sf))
-      case EA(sf) => UEA(stf2UStF(sf))
-      case EE(sf) => UEE(stf2UStF(sf))
+  def toUppaalFormula(formula:TemporalFormula, act2locs:Map[String,Set[Int]], act2port:Map[String,Int],initState:Int=0):List[UppaalFormula] = {
+    def tf2UF(tf: TemporalFormula): List[UppaalFormula] = tf match {
+      case AA(sf) => List(UAA(stf2UStF(sf)))
+      case AE(sf) => List(UAE(stf2UStF(sf)))
+      case EA(sf) => List(UEA(stf2UStF(sf)))
+      case EE(sf) => List(UEE(stf2UStF(sf)))
       case Every(a,b)=>
-        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.a, Set()).map(l => Location("Hub.L" + portToString(l)))
-        var res:UppaalStFormula = UTrue
+        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.name, Set()).map(l => Location("Hub.L" + portToString(l)))
+        var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
-          res = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          res = UImply(res,UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(1)))))
+          part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          part1 = UImply(part1,UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))))
         } else throw new RuntimeException("Action name not found: " + b)
-        UAA(res)
+        List(UAA(part1),UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0))))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)))
       //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
       case EveryAfter(a,b,t) =>
-        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.a, Set()).map(l => Location("Hub.L" + portToString(l)))
-        var res:UppaalStFormula = UTrue
+        val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.name, Set()).map(l => Location("Hub.L" + portToString(l)))
+        var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
-          res = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          res = UImply(res,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
+          part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.name),t)))))
         } else throw new RuntimeException("Action name not found: " + b)
-        UAA(res)
+        List(UAA(part1),UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),UNot(UCGuard(LT("t"+act2port(a.a),t))))))
         //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
 //         UEventually(stf2UStF(a),UNot(UAnd(UDGuard(Pred(">",List(Var("int"+portToString(act2port(a))+"_"+portToString(act2port(b))),Val(1)))),stf2UStF(a))))
 //        UEventually(stf2UStF(a),UAnd(UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))),UCGuard(GE(a.a,t))))
         //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GE(a.a,t))))),stf2UStF(Not(a))))
-      case Eventually(Action(a), Before(f1,f2)) => UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2)))
-      case Eventually(Action(a), Until(f1,Action(b))) => UEventually(stf2UStF(Action(a)),UAnd(UNot(mkFirstOf(Action(b))),stf2UStF(f1)))
+      case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
+      case Eventually(Action(a), Until(f1,Action(b))) => List(UEventually(stf2UStF(Action(a)),UAnd(UNot(mkFirstOf(Action(b))),stf2UStF(f1))))
       case Eventually(f1, f2) if f1.hasUntil || f2.hasUntil => throw new RuntimeException("Until clauses inside eventually clause can have the form a --> f until b")
       case Eventually(f1, f2) if f1.hasBefore || f2.hasBefore => throw new RuntimeException("Before clauses inside eventually clause can have the form a --> c before b")
-      case Eventually(f1, f2) => UEventually(stf2UStF(f1),stf2UStF(f2))
+      case Eventually(f1, f2) => List(UEventually(stf2UStF(f1),stf2UStF(f2)))
 //      case Until(f1,f2) => UAA(UImply(UNot(mkFirstOf(f2)),stf2UStF(f1)))
     }
 
@@ -624,7 +634,7 @@ object Uppaal {
       case Before(f1, f2) =>
         throw new FormulaException("Only single actions are supported on an eventually before clause")
       case Waits(a,mode,t) =>
-        val locsOfA: Set[UppaalStFormula] = act2locs.getOrElse(a.a, Set()).map(l => Location("Hub.L" + portToString(l)))
+        val locsOfA: Set[UppaalStFormula] = act2locs.getOrElse(a.name, Set()).map(l => Location("Hub.L" + portToString(l)))
         var res:UppaalStFormula = UTrue
         if (locsOfA.nonEmpty) {
           res = locsOfA.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
@@ -634,10 +644,10 @@ object Uppaal {
     }
 
     def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast => UNot(UCGuard(LT("t"+act2port(a.a),t)))
-      case AtMost => UNot(UCGuard(GT("t"+act2port(a.a),t)))
-      case NotMoreThan => UNot(UCGuard(GE("t"+act2port(a.a),t)))
-      case NotLessThan => UNot(UCGuard(LE("t"+act2port(a.a),t)))
+      case AtLeast => UNot(UCGuard(LT("t"+act2port(a.name),t)))
+      case AtMost => UNot(UCGuard(GT("t"+act2port(a.name),t)))
+      case NotMoreThan => UNot(UCGuard(GE("t"+act2port(a.name),t)))
+      case NotLessThan => UNot(UCGuard(LE("t"+act2port(a.name),t)))
     }
 
 //    def mkCan(sf: StFormula):UppaalStFormula = sf match {
@@ -649,7 +659,9 @@ object Uppaal {
 //      case _ => throw new FormulaException("Only simple logic expressions over actions are allowed inside a Can clause - in: "+Show(sf))
 //    }
 
-    tf2UF(formula)
+    if (act2port.map(_._1).toSet.intersect(formula.actions).nonEmpty)
+      tf2UF(formula).map(Simplify(_))
+    else throw new FormulaException("Unkown action names in formula "+ Show(formula))
   }
 
 

@@ -44,16 +44,16 @@ object Show {
     case EE(sf) => "E<> " + apply(sf)
     case Eventually(f1,f2) => apply(f1) + " --> " + apply(f2)
 //    case Until(f1,f2) => apply(f1) + " until " + apply(f2)
-    case Every(a,b) => "every "+ a.a + " --> " + b.a
-    case EveryAfter(a,b,t) => "every "+ a.a + " --> " + b.a + " after " + t
+    case Every(a,b) => "every "+ a.name + " --> " + b.name
+    case EveryAfter(a,b,t) => "every "+ a.name + " --> " + b.name + " after " + t
 
   }
 
   def apply(f: StFormula):String = f match {
     case Deadlock => "deadlock"
-    case Nothing=> "nothing"
+    case Nothing => "nothing"
     case TFTrue => "true"
-    case Action(a) => "@"+a
+    case Action(a) => a
     case DoingAction(a) => "doing " + a
     case DGuard(g) => apply(g)
     case CGuard(g) => ifta.backend.Show(g)
@@ -80,6 +80,7 @@ object Show {
     case UEA(sf) => "E[] " + apply(sf)
     case UEE(sf) => "E<> " + apply(sf)
     case UEventually(f1,f2) => apply(f1) + " --> " + apply(f2)
+    case UComposed(fs) => fs.map(apply).mkString("\n")
   }
 
   def apply(f: UppaalStFormula):String = Simplify(f) match {

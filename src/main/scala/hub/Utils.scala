@@ -1,5 +1,7 @@
 package hub
 
+import hub.analyse.TemporalFormula
+
 /**
   * Created by guillecledou on 2019-10-24
   */
@@ -51,6 +53,8 @@ object Utils {
   }
 
   def isSatisfiedVerifyta(result:String):Boolean = !result.split(" ").contains("NOT")
+
+//  def toVerifyta(formulas:List[TemporalFormula]):
 
 
 

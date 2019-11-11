@@ -43,6 +43,7 @@ object TemporalFormulaParser extends RegexParsers {
       case f~None => f}
 
   def simpleStFormula:Parser[StFormula] =
+    """nothing""".r ^^ { _ => Nothing} |
     "not"~>parFormula^^ Not |
     "can"~>parFormula^^ Can |
     parFormula //|
@@ -54,7 +55,7 @@ object TemporalFormulaParser extends RegexParsers {
 
   def singleStFormula:Parser[StFormula] =
     deadlock |
-    """nothing""".r ^^ { _ => Nothing} |
+//    """nothing""".r ^^ { _ => Nothing} |
     "doing"~>identifier ^^ DoingAction |
     identifier~"waits"~waitMode~int ^^ {case id~_~mode~t => Waits(Action(id),mode,t.toInt)} |
     identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
