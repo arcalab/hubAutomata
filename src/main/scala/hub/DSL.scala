@@ -17,7 +17,7 @@ object DSL {
   val hubs:Set[String] = Set("semaphore","resource", "port","dataEvent","event","fifo","blackboard","eventFull","dataEventFull","fifoFull","blackboardFull","await","timeout")
 
   /* Known names for primitive connectors */
-  val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader","putNB","getNB")
+  val primitiveConnectors:Set[String] = Set("node","dupl","dupls","xor","xors","mrg","drain","timer","nbtimer","writer","reader","nbreader","putNB","getNB","psync")
 
 
   class Assignment(n:String) {
