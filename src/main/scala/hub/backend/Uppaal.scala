@@ -54,7 +54,7 @@ object Uppaal {
     * @param hub uppaal ta
     * @return a string with the uppaal model (xml)
     */
-  def apply(uppaals:Set[Uppaal]):String = {
+  def apply(uppaals:Set[Uppaal],queries:List[UppaalFormula]=List()):String = {
     // all clocks to declare (everything global for now to simplify naming)
     val clocks:Set[String] = uppaals.flatMap(u=>u.clocks)
     // get all variables to declare
@@ -89,6 +89,7 @@ object Uppaal {
        |${uppaals.map(_.name).mkString("system ",",",";")}
        |</system>
        |<queries>
+       |${/*mkQueries(queries)*/}
        |</queries>
        |</nta>""".stripMargin
 
@@ -177,6 +178,19 @@ object Uppaal {
     var hubPorts = hub.ports.map(hub.getPortName(_))
     tf.actions.forall(a => hubPorts.contains(a))
 
+  }
+
+  // make queries template to save queries in xml file
+  private def mkQueries(queries:List[UppaalFormula]):String = {
+    if (queries.isEmpty) "" else queries.map(mkQuery(_)).mkString("","\n","")
+  }
+  // make query template to save query in xml file todo: do proper <= >= for xml.
+  private def mkQuery(query:UppaalFormula):String = {
+    s"""<query>
+       |<formula>${Show(query)}</formula>
+       |<comment></comment>
+       |</query>
+     """.stripMargin
   }
 
   private def mkWithCommitted(hub:HubAutomata):Uppaal = {
