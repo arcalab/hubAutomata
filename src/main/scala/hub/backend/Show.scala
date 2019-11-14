@@ -57,7 +57,7 @@ object Show {
     case DoingAction(a) => "doing " + a
     case DGuard(g) => apply(g)
     case CGuard(g) => ifta.backend.Show(g)
-    case Can(f1) => "can ("+apply(f1)+")"
+//    case Can(f1) => "can ("+apply(f1)+")"
     case Not(f1) => "not ("+ apply(f1) + ")"
     case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
     case Or(f1,f2) => "(" + apply(f1) + " or " + apply(f2) + ")"
@@ -70,8 +70,8 @@ object Show {
   def apply(mode: WaitMode):String = mode match {
     case AtLeast => "atLeast"
     case AtMost => "atMost"
-    case MoreThan => "notMoreThan"
-    case LessThan => "notLessThan"
+    case MoreThan => "moreThan"
+    case LessThan => "lessThan"
   }
 
   def apply(f:UppaalFormula): String = f match {

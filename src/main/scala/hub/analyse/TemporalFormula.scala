@@ -60,6 +60,15 @@ sealed trait TemporalFormula {
     case Every(a,b) => Set(a.name,b.name)
     case EveryAfter(a,b,t) => Set(a.name,b.name)
   }
+
+  def waitModes:Set[WaitMode] = this match {
+    case AA(f) => f.waitModes
+    case AE(f) => f.waitModes
+    case EA(f) => f.waitModes
+    case EE(f) => f.waitModes
+    case Eventually(f1,f2) => f1.waitModes ++ f2.waitModes
+    case _ => Set()
+  }
 }
 
 case class AA(f:StFormula) extends TemporalFormula
@@ -109,7 +118,7 @@ sealed trait StFormula {
   def actions:Set[String] = this match {
     case Action(name) => Set(name)
     case DoingAction(a) => Set(a)
-    case Can(f) => f.actions
+//    case Can(f) => f.actions
     case Not(f) => f.actions
     case And(f1,f2) => f1.actions++f2.actions
     case Or(f1,f2) => f1.actions++f2.actions
@@ -121,6 +130,15 @@ sealed trait StFormula {
     case _ => Set()
 
   }
+
+  def waitModes:Set[WaitMode] = this match {
+    case Waits(a,m,t) => Set(m)
+    case And(f1,f2)     => f1.waitModes ++ f2.waitModes
+    case Or(f1,f2)      => f1.waitModes ++ f2.waitModes
+    case Imply(f1,f2)   => f1.waitModes ++ f2.waitModes
+    case Not(f1)        => f1.waitModes
+    case _              => Set()
+  }
 }
 
 case object Deadlock                        extends StFormula
@@ -130,7 +148,7 @@ case class DGuard(g:Guard)                  extends StFormula
 case class CGuard(c:ClockCons)              extends StFormula
 case class Action(name: String)             extends StFormula
 case class DoingAction(a:String)            extends StFormula
-case class Can(f:StFormula)                 extends StFormula
+//case class Can(f:StFormula)                 extends StFormula
 case class Not(f:StFormula)                 extends StFormula
 case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula

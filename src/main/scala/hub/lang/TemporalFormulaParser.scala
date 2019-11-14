@@ -45,7 +45,7 @@ object TemporalFormulaParser extends RegexParsers {
   def simpleStFormula:Parser[StFormula] =
     """nothing""".r ^^ { _ => Nothing} |
     "not"~>parFormula^^ Not |
-    "can"~>parFormula^^ Can |
+    //"can"~>parFormula^^ Can |
     parFormula //|
 //    singleStFormula
 

@@ -89,7 +89,7 @@ object Simplify {
     case CGuard(c)=> CGuard(ifta.analyse.Simplify(c))
     case Not(Not(f)) => apply(f)
     case Not(f) => Not(apply(f))
-    case Can(f) => Can(apply(f))
+//    case Can(f) => Can(apply(f))
     case And(f1,f2) => (apply(f1),apply(f2)) match {
       case (TFTrue, f) => f
       case (f, TFTrue) => f
