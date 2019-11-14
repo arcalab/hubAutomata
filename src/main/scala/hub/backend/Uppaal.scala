@@ -89,7 +89,6 @@ object Uppaal {
        |${uppaals.map(_.name).mkString("system ",",",";")}
        |</system>
        |<queries>
-       |${/*mkQueries(queries)*/}
        |</queries>
        |</nta>""".stripMargin
 
