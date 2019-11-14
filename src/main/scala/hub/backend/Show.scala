@@ -70,8 +70,8 @@ object Show {
   def apply(mode: WaitMode):String = mode match {
     case AtLeast => "atLeast"
     case AtMost => "atMost"
-    case NotMoreThan => "notMoreThan"
-    case NotLessThan => "notLessThan"
+    case MoreThan => "notMoreThan"
+    case LessThan => "notLessThan"
   }
 
   def apply(f:UppaalFormula): String = f match {

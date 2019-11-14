@@ -146,5 +146,5 @@ sealed trait WaitMode
 
 case object AtLeast     extends WaitMode
 case object AtMost      extends WaitMode
-case object NotMoreThan extends WaitMode
-case object NotLessThan extends WaitMode
+case object MoreThan extends WaitMode
+case object LessThan extends WaitMode

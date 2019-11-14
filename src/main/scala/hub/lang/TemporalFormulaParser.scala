@@ -64,8 +64,8 @@ object TemporalFormulaParser extends RegexParsers {
   def waitMode:Parser[WaitMode] =
     "atLeast".r ^^ {_ => AtLeast}  |
     "atMost".r  ^^ {_ => AtMost}  |
-    "notMoreThan".r ^^ {_ => NotMoreThan} |
-    "notLessThan".r ^^ {_ => NotLessThan}
+    "moreThan".r ^^ {_ => MoreThan} |
+    "lessThan".r ^^ {_ => LessThan}
 
   def boolCond:Parser[StFormula => StFormula] =
     "or"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |
