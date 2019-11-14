@@ -563,10 +563,7 @@ object Uppaal {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
           part1 = UImply(part1,UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))))
         } else throw new RuntimeException("Action name not found: " + b)
-        List(UAA(part1),UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
-        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0))))))
-        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)))
-      //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))))
+        List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case EveryAfter(a,b,t) =>
         val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.name, Set()).map(l => Location("Hub.L" + portToString(l)))
         var part1:UppaalStFormula = UTrue
@@ -574,12 +571,7 @@ object Uppaal {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
           part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.name),t)))))
         } else throw new RuntimeException("Action name not found: " + b)
-        List(UAA(part1),UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
-        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(stf2UStF(b),UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),UNot(UCGuard(LT("t"+act2port(a.a),t))))))
-        //UEventually(stf2UStF(DoingAction(a.a)),UAnd(UAnd(UDGuard(Pred("==",List(Var("int"+portToString(act2port(a.a))+"_"+portToString(act2port(b.a))),Val(0)))),stf2UStF(b)),UNot(UCGuard(LT("t"+act2port(a.a),t)))))
-//         UEventually(stf2UStF(a),UNot(UAnd(UDGuard(Pred(">",List(Var("int"+portToString(act2port(a))+"_"+portToString(act2port(b))),Val(1)))),stf2UStF(a))))
-//        UEventually(stf2UStF(a),UAnd(UImply(UNot(mkFirstOf(b)),stf2UStF(Not(a))),UCGuard(GE(a.a,t))))
-        //UEventually(stf2UStF(a),UImply(UNot(mkFirstOf(And(b,CGuard(GE(a.a,t))))),stf2UStF(Not(a))))
+        List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
       case Eventually(Action(a), Until(f1,Action(b))) => List(UEventually(stf2UStF(Action(a)),UAnd(UNot(mkFirstOf(Action(b))),stf2UStF(f1))))
       case Eventually(f1, f2) if f1.hasUntil || f2.hasUntil => throw new RuntimeException("Until clauses inside eventually clause can have the form a --> f until b")
@@ -612,11 +604,8 @@ object Uppaal {
       case Nothing        => UDGuard(act2port.map(a => Pred("==",List(Var("port"+a._1),Val(0)))).foldRight[Guard](Ltrue)(_&&_))
       case TFTrue => UTrue
       case Action(a) =>
-//        val locs: Set[UppaalStFormula] = act2locs.getOrElse(a, Set()).map(l => Location("Hub.L" + portToString(l)))
-//        if (locs.nonEmpty) locs.foldRight[UppaalStFormula](UNot(UTrue))(_ || _) else throw new RuntimeException("Action name not found: " + a)
-//        UDGuard(Pred("==", List(Var("port" + a), Val(1))))
         if (act2port.isDefinedAt(a))
-          UCGuard(ET("t"+act2port(a),0))
+          UAnd(stf2UStF(DoingAction(a)),UCGuard(ET("t"+act2port(a),0)))
         else throw new FormulaException("Unknown port name: " + a)
       case DoingAction(a) => UDGuard(Pred("==", List(Var("port" + a), Val(1))))
       case DGuard(g) => UDGuard(g)
@@ -633,7 +622,15 @@ object Uppaal {
         res
       case Before(f1, f2) =>
         throw new FormulaException("Only single actions are supported on an eventually before clause")
-      case Waits(a,mode,t) =>
+      case Waits(a,mode,t) if mode == AtMost || mode == NotMoreThan =>
+        val locsOfA: Set[UppaalStFormula] = act2locs.getOrElse(a.name, Set()).map(l => Location("Hub.L" + portToString(l)))
+        var res:UppaalStFormula = UTrue
+        if (locsOfA.nonEmpty) {
+          res = locsOfA.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          res = UOr(UImply(res,mode2UStF(a,mode,t)),stf2UStF(Nothing))
+        } else throw new RuntimeException("Action name not found: " + a)
+        res
+      case Waits(a,mode,t) => // atLeast or notLessThan
         val locsOfA: Set[UppaalStFormula] = act2locs.getOrElse(a.name, Set()).map(l => Location("Hub.L" + portToString(l)))
         var res:UppaalStFormula = UTrue
         if (locsOfA.nonEmpty) {
@@ -644,10 +641,10 @@ object Uppaal {
     }
 
     def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast => UNot(UCGuard(LT("t"+act2port(a.name),t)))
-      case AtMost => UNot(UCGuard(GT("t"+act2port(a.name),t)))
-      case NotMoreThan => UNot(UCGuard(GE("t"+act2port(a.name),t)))
-      case NotLessThan => UNot(UCGuard(LE("t"+act2port(a.name),t)))
+      case AtLeast => UCGuard(GE("t"+act2port(a.name),t))
+      case AtMost => UCGuard(LE("t"+act2port(a.name),t))
+      case NotMoreThan => UCGuard(LT("t"+act2port(a.name),t))
+      case NotLessThan => UCGuard(GT("t"+act2port(a.name),t))
     }
 
 //    def mkCan(sf: StFormula):UppaalStFormula = sf match {
