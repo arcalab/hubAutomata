@@ -106,7 +106,7 @@ object Show {
     case LAnd(g1, g2) => showUppaalGuard(g1) + "  && " + showUppaalGuard(g2)
     case LNot(g) => s"!(${showUppaalGuard(g)})"
     case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-","&lt;?","&gt;?").contains(name) =>
-      "("+apply(a1)+name+apply(a2)+")"
+      "("+apply(a1)+ " " + name + " " + apply(a2)+")"
     case Pred(name,param) =>
       s"$name(${param.map(apply(_)).mkString(",")})"
   }

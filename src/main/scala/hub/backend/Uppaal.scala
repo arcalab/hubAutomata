@@ -49,6 +49,12 @@ object Uppaal {
 
   }
 
+  def saveWithQueries(uppaal: Uppaal,queries:List[UppaalFormula]):String =
+    apply(Set(uppaal),queries)
+
+  def saveWithQueries(uppaals: Set[Uppaal],queries:List[UppaalFormula]):String =
+    apply(uppaals,queries)
+
   /**
     * Given an Uppaal ta returns xml model
     * @param hub uppaal ta
@@ -89,6 +95,7 @@ object Uppaal {
        |${uppaals.map(_.name).mkString("system ",",",";")}
        |</system>
        |<queries>
+       |${if (queries.nonEmpty) mkQueries(queries) else ""}
        |</queries>
        |</nta>""".stripMargin
 
@@ -174,22 +181,46 @@ object Uppaal {
   }
 
   private def validFormula(tf:TemporalFormula,hub:HubAutomata):Boolean = {
-    var hubPorts = hub.ports.map(hub.getPortName(_))
+    val hubPorts = hub.ports.map(hub.getPortName)
     tf.actions.forall(a => hubPorts.contains(a))
 
   }
 
   // make queries template to save queries in xml file
   private def mkQueries(queries:List[UppaalFormula]):String = {
-    if (queries.isEmpty) "" else queries.map(mkQuery(_)).mkString("","\n","")
+    if (queries.isEmpty) "" else queries.map(mkQuery).mkString("","\n","")
   }
   // make query template to save query in xml file todo: do proper <= >= for xml.
   private def mkQuery(query:UppaalFormula):String = {
     s"""<query>
-       |<formula>${Show(query)}</formula>
+       |<formula>${mkUppaalFormula(query)}</formula>
        |<comment></comment>
        |</query>
      """.stripMargin
+  }
+
+  private def mkUppaalFormula(f:UppaalFormula): String = f match {
+    case UAA(sf) => "A[] " + mkUppaalStFormula(sf)
+    case UAE(sf) => "A&lt;&gt; " + mkUppaalStFormula(sf)
+    case UEA(sf) => "E[] " + mkUppaalStFormula(sf)
+    case UEE(sf) => "E&lt;&gt; " + mkUppaalStFormula(sf)
+    case UEventually(f1,f2) => mkUppaalStFormula(f1) + " --&gt; " + mkUppaalStFormula(f2)
+  }
+
+  private def mkUppaalStFormula(uf:UppaalStFormula):String = uf match {
+    case UDeadlock => "deadlock"
+    case UTrue => "true"
+    case Location(l) => l
+    case UDGuard(g) => Show.showUppaalGuard(g)
+    case UCGuard(cc) => mkCC(cc)
+    case UNot(f1) => "not("+ mkUppaalStFormula(f1) + ")"
+    case UAnd(f1,f2) => parShow(f1) + " and " + parShow(f2)
+    case UOr(f1,f2) =>  parShow(f1) + " or " + parShow(f2)
+    case UImply(f1,f2) => parShow(f1) + " imply " + parShow(f2)
+  }
+  private def parShow(f: UppaalStFormula): String = f match {
+    case UDeadlock | UTrue | UNot(_) => mkUppaalStFormula(f)
+    case _ => "("+mkUppaalStFormula(f)+")"
   }
 
   private def mkWithCommitted(hub:HubAutomata):Uppaal = {
@@ -810,7 +841,6 @@ object Uppaal {
     if      (cc==CTrue) Show.showUppaalGuard(g)
     else if (g==Ltrue) mkCC(cc)
     else mkCC(cc)+" &amp;&amp; "+Show.showUppaalGuard(g)
-
 
   private def mkUpdates(from:Int,upds:String): String =
     s"""<label kind="assignment" x="${from*100+15}" y="-34">${upds}</label>"""

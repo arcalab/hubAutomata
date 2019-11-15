@@ -116,4 +116,4 @@ object Verifyta {
   * @param uf
   * @param tf2uf
   */
-case class VerifytaCall(um:Set[Uppaal], uf: List[UppaalFormula]) {}
+case class VerifytaCall(  um:Set[Uppaal], uf: List[UppaalFormula]) {}
