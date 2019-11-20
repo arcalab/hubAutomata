@@ -211,16 +211,46 @@ object Uppaal {
     case UDeadlock => "deadlock"
     case UTrue => "true"
     case Location(l) => l
-    case UDGuard(g) => Show.showUppaalGuard(g)
+    case UDGuard(g) => mkUFormulaGuard(g)
     case UCGuard(cc) => mkCC(cc)
     case UNot(f1) => "not("+ mkUppaalStFormula(f1) + ")"
     case UAnd(f1,f2) => parShow(f1) + " and " + parShow(f2)
     case UOr(f1,f2) =>  parShow(f1) + " or " + parShow(f2)
     case UImply(f1,f2) => parShow(f1) + " imply " + parShow(f2)
   }
+
   private def parShow(f: UppaalStFormula): String = f match {
     case UDeadlock | UTrue | UNot(_) => mkUppaalStFormula(f)
     case _ => "("+mkUppaalStFormula(f)+")"
+  }
+
+  private def mkUFormulaGuard(g:Guard):String = Simplify(g) match {
+    case Ltrue => "true"
+    case LNot(Ltrue) => "false"
+    case LOr(g1, g2) => mkUFormulaGuard(g1) + " or " + mkUFormulaGuard(g2)
+    case LAnd(g1, g2) => mkUFormulaGuard(g1) + "  and " + mkUFormulaGuard(g2)
+    case LNot(g) => s"!(${mkUFormulaGuard(g)})"
+    case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-").contains(name) =>
+      "("+Show(a1)+ " " + mkUFormulaGuardFun(name) + " " + Show(a2)+")"
+    case Pred(name,param) =>
+      s"$name(${param.map(p => p match {
+        case Fun(n,p) => mkUFormulaGuardFun(n)
+      }).mkString(",")})"
+  }
+
+  private def mkUFormulaGuardFun(name: String): String = name match {
+    case "<=" => " &lt;= "
+    case "<"  => " &lt;"
+    case ">=" => " &gt;= "
+    case "<=" => " &gt; "
+    case _ => " " + name + " "
+  }
+
+  private def mkUFormulaExpr(e:Expr):String = e match {
+    case Fun(n,a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-").contains(n) => // cannot call other kind of functions
+      "("+mkUFormulaExpr(a1)+ " " + mkUFormulaGuardFun(n) + " " + mkUFormulaExpr(a2)+")"
+    case Fun(n,args) => throw new FormulaException(s"Functions not allow in Uppaal TCTL formula, but ${Show(e)} found")
+    case _ => Show(e)
   }
 
   private def mkWithCommitted(hub:HubAutomata):Uppaal = {
@@ -840,7 +870,7 @@ object Uppaal {
   private def mkCCG(cc:ClockCons,g:Guard):String = //if (cc==CTrue) "" else mkCC(cc)
     if      (cc==CTrue) Show.showUppaalGuard(g)
     else if (g==Ltrue) mkCC(cc)
-    else mkCC(cc)+" &amp;&amp; "+Show.showUppaalGuard(g)
+    else mkCC(cc)+" &amp;&amp; "+ Show.showUppaalGuard(g)
 
   private def mkUpdates(from:Int,upds:String): String =
     s"""<label kind="assignment" x="${from*100+15}" y="-34">${upds}</label>"""

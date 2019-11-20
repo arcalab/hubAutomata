@@ -98,17 +98,15 @@ object Show {
     case _ => "("+apply(f)+")"
   }
 
-
   def showUppaalGuard(g:Guard):String = Simplify(g) match {
     case Ltrue => "true"
     case LNot(Ltrue) => "false"
-    case LOr(g1, g2) => showUppaalGuard(g1) + " || " + showUppaalGuard(g2)
-    case LAnd(g1, g2) => showUppaalGuard(g1) + "  && " + showUppaalGuard(g2)
-    case LNot(g) => s"!(${showUppaalGuard(g)})"
+    case LOr(g1, g2) => Show.showUppaalGuard(g1) + " || " + Show.showUppaalGuard(g2)
+    case LAnd(g1, g2) => Show.showUppaalGuard(g1) + "  && " + Show.showUppaalGuard(g2)
+    case LNot(g) => s"!(${Show.showUppaalGuard(g)})"
     case Pred(name, a1::a2::Nil) if  Set("<=","<","==",">",">=","+","-","&lt;?","&gt;?").contains(name) =>
-      "("+apply(a1)+ " " + name + " " + apply(a2)+")"
+      "("+Show(a1)+ " " + name + " " + Show(a2)+")"
     case Pred(name,param) =>
-      s"$name(${param.map(apply(_)).mkString(",")})"
+      s"$name(${param.map(Show(_)).mkString(",")})"
   }
-
 }
