@@ -344,12 +344,22 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
       areDependencies ++= u.dep -- intermediateOfU
     }
 
+    println("Intermediate variables: \n"+ intermediateVars.mkString(","))
     var ntrans: Trans = Set()
     for (t@(from,(to,p,g,cc,cr,u,es)) <- simplifiedTrans) {
       // remove unused variables of u
       var cleanUpd = if (u.vars.intersect(unusedVars).isEmpty) u else rmUnusedUpd(u,unusedVars)
       // remove intermediate variables of u
-      cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
+//      println("General Intermediates vs here: \n")
+//      println(intermediateVars )
+      var intermediateOfT = getIntermediateUpd(u,Set())
+//      println(intermediateVars)
+//      println(intermediateOfT)
+//      println("About to clean update: \n" + cleanUpd)
+//      println("Intersects with intermediate? : \n" + cleanUpd.vars.intersect(intermediateVars))
+      //cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
+      cleanUpd = if (cleanUpd.vars.intersect(intermediateVars.intersect(intermediateOfT)).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars.intersect(intermediateOfT))
+//      println("New Update: \n"+cleanUpd)
       ntrans += ((from,(to,p,g,cc,cr,Simplify(cleanUpd),es)))
     }
 
