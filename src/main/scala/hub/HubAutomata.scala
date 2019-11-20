@@ -344,7 +344,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
       areDependencies ++= u.dep -- intermediateOfU
     }
 
-    println("Intermediate variables: \n"+ intermediateVars.mkString(","))
+//    println("Intermediate variables: \n"+ intermediateVars.mkString(","))
     var ntrans: Trans = Set()
     for (t@(from,(to,p,g,cc,cr,u,es)) <- simplifiedTrans) {
       // remove unused variables of u
@@ -960,6 +960,7 @@ object HubAutomata {
         case LT(c,n) => LT(getClockName(c,aut),n)
       }
 
+
       // just 1
       for ((from1, (to1, fire1, g1, cc1,cr1, u1, es1)) <- a1.trans; p2 <- a2.getStates)
         if (ok(fire1))
@@ -987,9 +988,9 @@ object HubAutomata {
       // println(s"ports: $newStates")
 
 
-      val resInvariant = (for (l1<-a1.sts; l2<-a2.sts)
-        yield mkState(l1, l2) -> CAnd(a1.inv.withDefaultValue(CTrue)(l1),
-          a2.inv.withDefaultValue(CTrue)(l2))).toMap[Int,ClockCons]
+      val resInvariant:Map[Int,ClockCons] = (for (l1<-a1.sts; l2<-a2.sts)
+        yield mkState(l1, l2) -> CAnd(renameClocks(a1.inv.withDefaultValue(CTrue)(l1),1),
+          renameClocks(a2.inv.withDefaultValue(CTrue)(l2),2))).toMap
 
       val res1 = HubAutomata(newPorts
         , for (l1<-a1.sts; l2<-a2.sts) yield mkState(l1, l2)
@@ -1002,6 +1003,7 @@ object HubAutomata {
 
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
+//      println("return clocks: "+ res2.clocks)
       res2
     }
   }
