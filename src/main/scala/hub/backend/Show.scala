@@ -37,6 +37,23 @@ object Show {
     case Pred(name,param) => s"$name(${param.map(apply).mkString(",")})"
   }
 
+  def apply(cc:CCons):String = cc match {
+    case CTrue => "true"
+    case ET(c, expr) => s"$c  == ${Show(expr)}"
+    case LT(c, expr) => s"$c < ${Show(expr)}"
+    case GT(c, expr) => s"$c >= ${Show(expr)}"
+    case LE(c, expr) => s"$c <= ${Show(expr)}"
+    case GE(c, expr) => s"$c > ${Show(expr)}"
+    case CAnd(cc1, cc2) => Show(cc1) + "and" + Show(cc2)
+  }
+
+  def apply(cexpr:ClockExpr):String = cexpr match {
+    case CInt(i) => i.toString
+    case Clock(c) => c
+    case CPlus(c,i) => s"$c + $i"
+    case CMinus(c,i) => s"$c - $i"
+  }
+
   def apply(f:TemporalFormula): String = f match {
     case AA(sf) => "A[] " + apply(sf)
     case AE(sf) => "A<> " + apply(sf)
@@ -56,7 +73,7 @@ object Show {
     case Action(a) => a
     case DoingAction(a) => "doing " + a
     case DGuard(g) => apply(g)
-    case CGuard(g) => ifta.backend.Show(g)
+    case CGuard(g) => apply(g)
 //    case Can(f1) => "can ("+apply(f1)+")"
     case Not(f1) => "not ("+ apply(f1) + ")"
     case And(f1,f2) => "(" + apply(f1) + " and " + apply(f2) + ")"
@@ -87,7 +104,7 @@ object Show {
     case UTrue => "true"
     case Location(l) => l
     case UDGuard(g) => showUppaalGuard(g)
-    case UCGuard(g) => ifta.backend.Show(g)
+    case UCGuard(g) => apply(g)
     case UNot(f1) => "not("+ apply(f1) + ")"
     case UAnd(f1,f2) => parShow(f1) + " and " + parShow(f2)
     case UOr(f1,f2) =>  parShow(f1) + " or " + parShow(f2)

@@ -1,6 +1,6 @@
 package hub.analyse
 
-import hub.Guard
+import hub.{CCons, Guard}
 import ifta.ClockCons
 
 /**
@@ -25,7 +25,7 @@ sealed trait UppaalStFormula {
 case object UDeadlock                                    extends UppaalStFormula
 case object UTrue                                        extends UppaalStFormula
 case class UDGuard(g:Guard)                              extends UppaalStFormula
-case class UCGuard(c:ClockCons)                          extends UppaalStFormula
+case class UCGuard(c:CCons)                              extends UppaalStFormula
 case class Location(a:String)                            extends UppaalStFormula
 case class UNot(f:UppaalStFormula)                       extends UppaalStFormula
 case class UAnd(f1:UppaalStFormula, f2:UppaalStFormula)  extends UppaalStFormula

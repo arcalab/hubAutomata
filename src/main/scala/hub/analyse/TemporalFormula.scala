@@ -1,7 +1,7 @@
 package hub.analyse
 
-import hub.Guard
-import ifta.ClockCons
+import hub.{CCons, Guard}
+
 
 /**
   * Created by guillecledou on 2019-10-05
@@ -145,10 +145,9 @@ case object Deadlock                        extends StFormula
 case object Nothing                         extends StFormula
 case object TFTrue                          extends StFormula
 case class DGuard(g:Guard)                  extends StFormula
-case class CGuard(c:ClockCons)              extends StFormula
+case class CGuard(c:CCons)                  extends StFormula
 case class Action(name: String)             extends StFormula
 case class DoingAction(a:String)            extends StFormula
-//case class Can(f:StFormula)                 extends StFormula
 case class Not(f:StFormula)                 extends StFormula
 case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula

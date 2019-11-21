@@ -3,7 +3,6 @@ package hub.backend
 import hub._
 import hub.analyse._
 import hub.common.FormulaException
-import ifta._
 
 /**
   * Created by guillecledou on 2019-09-27
@@ -19,10 +18,10 @@ import ifta._
   * @param committed set of committed states
   * @param act2locs a map from actions to a set of (committed) locations where is true that the action just executed
   */
-case class Uppaal(locs:Set[Int],init:Int,clocks:Set[String],edges:Set[UppaalEdge],inv:Map[Int,ClockCons],
+case class Uppaal(locs:Set[Int],init:Int,clocks:Set[String],edges:Set[UppaalEdge],inv:Map[Int,CCons],
                   committed:Set[Int],act2locs:Map[Int,Set[Int]],initVal:Map[Var,Expr],name:String) {}
 
-case class UppaalEdge(from:Int,to:Int,ports:Set[String],ccons:ClockCons,creset:Set[String],guard:Guard,upd:Update) {}
+case class UppaalEdge(from:Int,to:Int,ports:Set[String],ccons:CCons,creset:Set[String],guard:Guard,upd:Update) {}
 
 object Uppaal {
 
@@ -540,11 +539,12 @@ object Uppaal {
     * @param cc clock constraint of the form >= or ==
     * @return and uppaal automaton
     */
-  private def mkObserver(cc:ClockCons,withReset:Boolean=false):Uppaal = {
+  //todo: mkObserver needs to be revised now that clock constraints support other clocks.
+  private def mkObserver(cc:CCons,withReset:Boolean=false):Uppaal = {
     // invariant constraint for the initial state of the observer
-    val invCC:ClockCons = cc match {
-      case GE(c,n) => LE(c,n)
-      case ET(c,n) => LE(c,n)
+    val invCC:CCons = cc match {
+      case GE(c,CInt(n)) => LE(c,CInt(n))
+      case ET(c,CInt(n)) => LE(c,CInt(n))
       case _ => throw new FormulaException("Only clock constraints of the form >= or == are allowed in an observer invariant")
     }
     // variable name for the clock constraint and the observer
@@ -567,13 +567,19 @@ object Uppaal {
     * @param cc clock constraint of the form <=,<,=,>,>=
     * @return cc as a string for a variable name
     */
-  private def cc2Name(cc: ClockCons):String = cc match {
-    case LE(c,n) => "v"+c+"le"+n
-    case LT(c,n) => "v"+c+"lt"+n
-    case ET(c,n) => "v"+c+"et"+n
-    case GT(c,n) => "v"+c+"gt"+n
-    case GE(c,n) => "v"+c+"ge"+n
+  private def cc2Name(cc: CCons):String = cc match {
+    case LE(c,n) => "v"+c+"le"+cexpr2Name(n)
+    case LT(c,n) => "v"+c+"lt"+cexpr2Name(n)
+    case ET(c,n) => "v"+c+"et"+cexpr2Name(n)
+    case GT(c,n) => "v"+c+"gt"+cexpr2Name(n)
+    case GE(c,n) => "v"+c+"ge"+cexpr2Name(n)
     case CAnd(c,n) => throw new FormulaException("Only a simple clock constraints can be translated into a variable name")
+  }
+
+  private def cexpr2Name(ce:ClockExpr):String = ce match {
+    case CMinus(c,i) => s"${c}m${i}"
+    case CPlus(c,i) => s"${c}p${i}"
+    case _ => Show(ce)
   }
 
   /**
@@ -583,7 +589,7 @@ object Uppaal {
     * @param f temporal formula
     * @return a pair of set of actions and set of clocks
     */
-  private def collectFirstOf(f:StFormula):(Set[String],Set[ClockCons]) = f match {
+  private def collectFirstOf(f:StFormula):(Set[String],Set[CCons]) = f match {
     case Action(a) => (Set(a),Set())
     case Deadlock => (Set(),Set())
     case TFTrue => (Set(),Set())
@@ -615,7 +621,7 @@ object Uppaal {
     * @param cc a clock constraint
     * @return
     */
-  private def collectCCons(cc:ClockCons):Set[ClockCons] = cc match {
+  private def collectCCons(cc:CCons):Set[CCons] = cc match {
     case CTrue => Set()
     case GE(c,n) => Set(cc)
     case ET(c,n) => Set(cc)
@@ -649,7 +655,7 @@ object Uppaal {
         var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.name),t)))))
+          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.name),CInt(t))))))
         } else throw new FormulaException("Action name not found: " + b)
         List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
@@ -685,7 +691,7 @@ object Uppaal {
       case TFTrue => UTrue
       case Action(a) =>
         if (act2port.isDefinedAt(a))
-          UAnd(stf2UStF(DoingAction(a)),UCGuard(ET("t"+act2port(a),0)))
+          UAnd(stf2UStF(DoingAction(a)),UCGuard(ET("t"+act2port(a),CInt(0))))
         else throw new FormulaException("Unknown port name: " + a)
       case DoingAction(a) => UDGuard(Pred("==", List(Var("port" + a), Val(1))))
       case DGuard(g) => UDGuard(g)
@@ -715,10 +721,10 @@ object Uppaal {
     }
 
     def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast => UCGuard(GE("t"+act2port(a.name),t))
-      case AtMost => UCGuard(LE("t"+act2port(a.name),t))
-      case MoreThan => UCGuard(GT("t"+act2port(a.name),t))
-      case LessThan => UCGuard(LT("t"+act2port(a.name),t))
+      case AtLeast => UCGuard(GE("t"+act2port(a.name),CInt(t)))
+      case AtMost => UCGuard(LE("t"+act2port(a.name),CInt(t)))
+      case MoreThan => UCGuard(GT("t"+act2port(a.name),CInt(t)))
+      case LessThan => UCGuard(LT("t"+act2port(a.name),CInt(t)))
     }
 
 //    def mkCan(sf: StFormula):UppaalStFormula = sf match {
@@ -742,13 +748,13 @@ object Uppaal {
     * @param act2port a map from an action name to the corresponding int port number (used as clock name: "t"+portname
     * @return a suitable clock constraint for uppaal
     */
-  def expandCCons(cc:ClockCons,act2port:Map[String,Int]):ClockCons = cc match {
+  def expandCCons(cc:CCons,act2port:Map[String,Int]):CCons = cc match {
     case CTrue => cc
-    case LE(c,n) => LE(changeClock(c,act2port),n)
-    case GE(c,n) => GE(changeClock(c,act2port),n)
-    case ET(c,n) => ET(changeClock(c,act2port),n)
-    case LT(c,n) => LT(changeClock(c,act2port),n)
-    case GT(c,n) => GT(changeClock(c,act2port),n)
+    case LE(c,n) => LE(changeClock(c,act2port),expandCCExpr(n,act2port))
+    case GE(c,n) => GE(changeClock(c,act2port),expandCCExpr(n,act2port))
+    case ET(c,n) => ET(changeClock(c,act2port),expandCCExpr(n,act2port))
+    case LT(c,n) => LT(changeClock(c,act2port),expandCCExpr(n,act2port))
+    case GT(c,n) => GT(changeClock(c,act2port),expandCCExpr(n,act2port))
     case CAnd(c1,c2) => CAnd(expandCCons(c1,act2port),expandCCons(c2,act2port))
   }
 
@@ -763,6 +769,13 @@ object Uppaal {
     if (!c.endsWith(".t")) c
     else if (act2port.isDefinedAt(c.dropRight(2))) "t"+portToString(act2port(c.dropRight(2)))
     else throw new RuntimeException("Action name not found: "+c)
+  }
+
+  private def expandCCExpr(ce:ClockExpr,act2port:Map[String,Int]):ClockExpr = ce match {
+    case Clock(c) => Clock(changeClock(c,act2port))
+    case CPlus(c,i) => CPlus(changeClock(c,act2port),i)
+    case CMinus(c,i) => CMinus(changeClock(c,act2port),i)
+    case _ => ce
   }
 
   /**
@@ -816,7 +829,7 @@ object Uppaal {
       (if (intvs.nonEmpty) "int[0,2] "+intvs.map(Show(_)).mkString("",",",";\n") else "")
   }
 
-  private def mkLocation(loc:Int,inv:ClockCons,committed:Boolean):String = {
+  private def mkLocation(loc:Int,inv:CCons,committed:Boolean):String = {
     s"""<location id="id$loc" x="${loc*100}" y="0">
        |<name x="${loc*100-10}" y="-34">L${if (loc>=0) loc else "_"+(-1*loc)}</name>
        |${if (inv==CTrue) "" else mkInvariant(loc*100-10,inv)}
@@ -824,17 +837,17 @@ object Uppaal {
        |</location>""".stripMargin
   }
 
-  private def mkInvariant(i:Int,cc:ClockCons): String =
+  private def mkInvariant(i:Int,cc:CCons): String =
     s"""<label kind="invariant" x="$i" y="11">${mkCC(cc)}</label>"""
 
-  private def mkCC(cc:ClockCons): String = cc match {
+  private def mkCC(cc:CCons): String = cc match {
     case CTrue => "true"
-    case ET(c, n) => c+"=="+n
-    case LT(c, n) => c+"&lt;"+n
-    case GT(c, n) => c+"&gt;"+n
-    case LE(c, n) => c+"&lt;="+n
-    case GE(c, n) => c+"&gt;="+n
-    case CAnd(cc1, cc2) => mkCC(cc1)+" &amp;&amp; "+ mkCC(cc2)
+    case ET(c, n) => c+"=="+Show(n)
+    case LT(c, n) => c+"&lt;"+Show(n)
+    case GT(c, n) => c+"&gt;"+Show(n)
+    case LE(c, n) => c+"&lt;="+Show(n)
+    case GE(c, n) => c+"&gt;="+Show(n)
+    case CAnd(cc1, cc2) => mkCC(cc1)+" and "+ mkCC(cc2)
   }
 
   private def mkTransition(e:UppaalEdge):String = {
@@ -864,10 +877,10 @@ object Uppaal {
 
   private def mkUpd(u:Update):String = Show(u)
 
-  private def mkGuard(from:Int,cc:ClockCons,g:Guard): String =
+  private def mkGuard(from:Int,cc:CCons,g:Guard): String =
     s"""<label kind="guard" x="${from*100+25}" y="-34">${mkCCG(cc,g)}</label>"""
 
-  private def mkCCG(cc:ClockCons,g:Guard):String = //if (cc==CTrue) "" else mkCC(cc)
+  private def mkCCG(cc:CCons,g:Guard):String = //if (cc==CTrue) "" else mkCC(cc)
     if      (cc==CTrue) Show.showUppaalGuard(g)
     else if (g==Ltrue) mkCC(cc)
     else mkCC(cc)+" &amp;&amp; "+ Show.showUppaalGuard(g)

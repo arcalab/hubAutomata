@@ -4,10 +4,9 @@ import hub.HubAutomata.{Trans, Valuation}
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import hub.common.GenerationException
-import ifta._
 import preo.ast.CPrim
-import preo.backend.Network.{Port, Prim}
-import preo.backend.{Automata, AutomataBuilder, PortAutomata}
+import preo.backend.Network.{Prim}
+import preo.backend.{Automata, AutomataBuilder}
 
 import scala.collection.mutable
 
@@ -21,7 +20,7 @@ import scala.collection.mutable
   *              sets of actions and of edges (as in [[Prim]]).
   */
 case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
-                       clocks:Set[String],inv:Map[Int,ClockCons],initVal:Valuation,
+                       clocks:Set[String],inv:Map[Int,CCons],initVal:Valuation,
                        taskPort:(Set[Int],Set[Int])=(Set(),Set())) extends Automata {
 
   private var inSeed = 0
@@ -55,9 +54,9 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
       yield (
         from
         , s"${Show(Simplify(if(fullName) renamePortsInGuard(g) else g))}~"
-        + (ifta.analyse.Simplify(cc) match {
+        + (Simplify(cc) match {
             case CTrue => ""
-            case const => ifta.backend.Show(const)}) + "~"
+            case const => Show(const)}) + "~"
         + {if (fullName)
             fire.map(p => getPortName(p)+portDir(p)).mkString(".")
           else
@@ -74,9 +73,9 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
     * Returns the set of transitions
     * @return
     */
-  def getTransitions: Set[(Int,Int,Set[Int],ClockCons,Set[String],Guard,Update)] =
+  def getTransitions: Set[(Int,Int,Set[Int],CCons,Set[String],Guard,Update)] =
     for ((from, (to, fire, g,cc, cr, upd, es)) <- trans) yield
-      (from,to,fire,ifta.analyse.Simplify(cc),cr,g,upd)
+      (from,to,fire,Simplify(cc),cr,g,upd)
 
 
   /* Return the set of input ports */
@@ -515,7 +514,7 @@ object HubAutomata {
 
 
   // from -> (target, ports, guards, clock constraints, clock resets, update, originalEdge)
-  type Trans = Set[(Int,(Int,Set[Int],Guard,ClockCons,Set[String],Update,Set[Prim]))]
+  type Trans = Set[(Int,(Int,Set[Int],Guard,CCons,Set[String],Update,Set[Prim]))]
 
   type Valuation = Map[Var,Expr]
 
@@ -651,12 +650,12 @@ object HubAutomata {
             val period:Option[Int] = extraInfo.find(e => e.startsWith("period:")) match {
               case Some(s) => Some(s.drop(7).toInt)
               case _ => None}
-            val inv = if (period.isDefined) Map(seed->LE("cl",to),(seed-1)->LE("p",period.get))else  Map(seed->LE("cl",to))
+            val inv:Map[Int,CCons] = if (period.isDefined) Map(seed-> LE("cl",CInt(to)),(seed-1)->LE("p",CInt(period.get))) else  Map(seed->LE("cl",CInt(to)))
             val clocks = if (period.isDefined) Set("cl","p") else Set("cl")
             (HubAutomata(Set(a), Set(seed,seed-1),seed - 1,
-              Set(seed - 1 -> (seed, Set(), Ltrue, if(period.isDefined) ET("p",period.get) else CTrue, clocks, Noop, Set(e)),
-                seed -> (seed - 1, Set(a), Ltrue, LE("cl",to),Set(), "_bf":= a.toString, Set(e)),
-                seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+              Set(seed - 1 -> (seed, Set(), Ltrue, if(period.isDefined) ET("p",CInt(period.get)) else CTrue, clocks, Noop, Set(e)),
+                seed -> (seed - 1, Set(a), Ltrue, LE("cl",CInt(to)),Set(), "_bf":= a.toString, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
               , clocks,inv,Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set()))
               , seed + 2)
           case Prim(CPrim("nbtimer", _, _, extra), List(a), List(b),_) =>
@@ -667,12 +666,12 @@ object HubAutomata {
             val period:Option[Int] =  extraInfo.find(e => e.startsWith("period:")) match {
               case Some(s) => Some(s.drop(7).toInt)
               case _ => None}
-            val inv = if (period.isDefined) Map(seed->LE("cl",to),(seed-1)->LE("p",period.get))else  Map(seed->LE("cl",to))
+            val inv = if (period.isDefined) Map(seed->LE("cl",CInt(to)),(seed-1)->LE("p",CInt(period.get)))else  Map(seed->LE("cl",CInt(to)))
             val clocks = if (period.isDefined) Set("cl","p") else Set("cl")
             (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
-              Set(seed - 1 -> (seed, Set(a), Ltrue, if(period.isDefined) ET("p",period.get) else CTrue, clocks, "bf":= a.toString, Set(e)),
-                seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), b.toString := "bf", Set(e)),
-                seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
+              Set(seed - 1 -> (seed, Set(a), Ltrue, if(period.isDefined) ET("p",CInt(period.get)) else CTrue, clocks, "bf":= a.toString, Set(e)),
+                seed -> (seed - 1, Set(b), Ltrue, LE("cl",CInt(to)),Set(), b.toString := "bf", Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
               , clocks,inv,Map(),(Set(),Set(b)))
               , seed + 2)
           case Prim(CPrim("await", _, _, extra), List(a,b), List(),_) =>
@@ -686,9 +685,9 @@ object HubAutomata {
             //            }
             (HubAutomata(Set(a,b), Set(seed,seed-1),seed - 1,
               Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
-                seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), "bf":= b.toString, Set(e)),
-                seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-              , Set("cl"),Map(seed->LE("cl",to)),Map())
+                seed -> (seed - 1, Set(b), Ltrue, LE("cl",CInt(to)),Set(), "bf":= b.toString, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+              , Set("cl"),Map(seed->LE("cl",CInt(to))),Map())
               , seed + 2)
           case Prim(CPrim("noSnk", _, _, _), List(), List(a),_) =>
             (HubAutomata(Set(a), Set(seed),seed, Set(),Set(),Map(),Map()), seed + 1)
@@ -741,8 +740,8 @@ object HubAutomata {
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
           //          Set(("bfP" := a.toString) & ("c" := Fun("+",List(Var("c"),Val(1)))) & ("p" := Fun("mod",List(Fun("+",List(Var("p"),Val(1))),Var("N"))))), Set(e)),
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, ET("cl",to),Set(), b.toString := "bf", Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map())
+            seed -> (seed - 1, Set(b), Ltrue, ET("cl",CInt(to)),Set(), b.toString := "bf", Set(e)))
+          , Set("cl"),Map(seed->LE("cl",CInt(to))),Map())
           , seed + 2)
 
       case Prim(CPrim("psync", _, _, extra), List(a), List(b),_) =>
@@ -751,8 +750,8 @@ object HubAutomata {
           case Some(s) => s.drop(7).toInt
           case _ => 0}
         (HubAutomata(Set(a, b), Set(seed),seed,
-          Set(seed -> (seed, Set(a,b), Ltrue, ET("p",period), Set("p"), b.toString := a.toString, Set(e)))
-          , Set("p"),Map((seed)->LE("p",period)),Map())
+          Set(seed -> (seed, Set(a,b), Ltrue, ET("p",CInt(period)), Set("p"), b.toString := a.toString, Set(e)))
+          , Set("p"),Map((seed)->LE("p",CInt(period))),Map())
           , seed + 1)
       case Prim(CPrim("timeout", _, _, extra), List(a), List(b),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -761,9 +760,9 @@ object HubAutomata {
           case _ => 0}
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1,
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
-            seed -> (seed - 1, Set(b), Ltrue, LE("cl",to),Set(), b.toString := "bf", Set(e)),
-            seed -> (seed - 1, Set(), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map())
+            seed -> (seed - 1, Set(b), Ltrue, LE("cl",CInt(to)),Set(), b.toString := "bf", Set(e)),
+            seed -> (seed - 1, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",CInt(to))),Map())
           , seed + 2)
       case Prim(CPrim("putNB", _, _, extra), List(a), List(err,ok),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -772,9 +771,9 @@ object HubAutomata {
           case _ => 0}
         (HubAutomata(Set(a,err,ok), Set(seed,seed-1),seed - 1,
           Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue, Set("cl"), "bf":= a.toString, Set(e)),
-            seed -> (seed - 1, Set(ok), Ltrue, LE("cl",to),Set(), ok.toString := "bf", Set(e)),
-            seed -> (seed - 1, Set(err), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map(),(Set(),Set(ok)))
+            seed -> (seed - 1, Set(ok), Ltrue, LE("cl",CInt(to)),Set(), ok.toString := "bf", Set(e)),
+            seed -> (seed - 1, Set(err), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(ok)))
           , seed + 2)
       case Prim(CPrim("getNB", _, _, extra), List(in,go), List(c),_) =>
         var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
@@ -787,9 +786,9 @@ object HubAutomata {
         //            }
         (HubAutomata(Set(in,go,c), Set(seed,seed-1),seed - 1,
           Set(seed - 1 -> (seed, Set(go), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
-            seed -> (seed - 1, Set(in,c), Ltrue, LE("cl",to),Set(), "bf":= in.toString, Set(e)),
-            seed -> (seed - 1, Set(c), Ltrue, ET("cl",to),Set(), Noop, Set(e)))
-          , Set("cl"),Map(seed->LE("cl",to)),Map(),(Set(in),Set()))
+            seed -> (seed - 1, Set(in,c), Ltrue, LE("cl",CInt(to)),Set(), "bf":= in.toString, Set(e)),
+            seed -> (seed - 1, Set(c), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+          , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(in),Set()))
           , seed + 2)
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
@@ -950,14 +949,21 @@ object HubAutomata {
       }
 
       /** rename clocks in clock constraints */
-      def renameClocks(cc:ClockCons,aut:Int):ClockCons = cc match {
+      def renameClocks(cc:CCons,aut:Int):CCons = cc match {
         case CTrue => CTrue
         case CAnd(cc1,cc2) => CAnd(renameClocks(cc1,aut),renameClocks(cc2,aut))
-        case ET(c,n) => ET(getClockName(c,aut),n)
-        case GT(c,n) => GT(getClockName(c,aut),n)
-        case GE(c,n) => GE(getClockName(c,aut),n)
-        case LE(c,n) => LE(getClockName(c,aut),n)
-        case LT(c,n) => LT(getClockName(c,aut),n)
+        case ET(c,n) => ET(getClockName(c,aut),renameCExpr(n,aut))
+        case GT(c,n) => GT(getClockName(c,aut),renameCExpr(n,aut))
+        case GE(c,n) => GE(getClockName(c,aut),renameCExpr(n,aut))
+        case LE(c,n) => LE(getClockName(c,aut),renameCExpr(n,aut))
+        case LT(c,n) => LT(getClockName(c,aut),renameCExpr(n,aut))
+      }
+
+      def renameCExpr(ce:ClockExpr,aut:Int):ClockExpr = ce match {
+        case Clock(c) => Clock(getClockName(c,aut))
+        case CPlus(c,i) => CPlus(getClockName(c,aut),i)
+        case CMinus(c,i) => CMinus(getClockName(c,aut),i)
+        case _ => ce
       }
 
 
@@ -988,7 +994,7 @@ object HubAutomata {
       // println(s"ports: $newStates")
 
 
-      val resInvariant:Map[Int,ClockCons] = (for (l1<-a1.sts; l2<-a2.sts)
+      val resInvariant:Map[Int,CCons] = (for (l1<-a1.sts; l2<-a2.sts)
         yield mkState(l1, l2) -> CAnd(renameClocks(a1.inv.withDefaultValue(CTrue)(l1),1),
           renameClocks(a2.inv.withDefaultValue(CTrue)(l2),2))).toMap
 

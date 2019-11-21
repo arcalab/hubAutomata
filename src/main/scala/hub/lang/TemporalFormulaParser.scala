@@ -1,7 +1,7 @@
 package hub.lang
 
+import hub._
 import hub.analyse._
-import ifta._
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
@@ -74,11 +74,18 @@ object TemporalFormulaParser extends RegexParsers {
     "before"~>stFormula ^^ {f => (f1:StFormula) => Before(f1,f)} |
     "until"~>stFormula ^^ {f => (f1:StFormula) => Until(f1,f)}
 
-  def intCond:Parser[String => ClockCons] =
-    "<="~>int ^^ {i => (c:String) => LE(c,i.toInt)} |
-    "<"~>int  ^^ {i => (c:String) => LT(c,i.toInt)} |
-    ">="~>int ^^ {i => (c:String) => GE(c,i.toInt)} |
-    ">"~>int  ^^ {i => (c:String) => GT(c,i.toInt)} |
-    "=="~>int ^^ {i => (c:String) => ET(c,i.toInt)}
+  def intCond:Parser[String => CCons] =
+    "<="~>clockExpr ^^ {cexpr => (c:String) => LE(c,cexpr)} |
+    "<"~>clockExpr  ^^ {cexpr => (c:String) => LT(c,cexpr)} |
+    ">="~>clockExpr ^^ {cexpr => (c:String) => GE(c,cexpr)} |
+    ">"~>clockExpr  ^^ {cexpr => (c:String) => GT(c,cexpr)} |
+    "=="~>clockExpr ^^ {cexpr => (c:String) => ET(c,cexpr)}
+
+  def clockExpr:Parser[ClockExpr] =
+    identifier~".t" ~ "\\+|\\-".r ~ int ^^
+      {case c~_~op~i => if (op.matches("\\+")) CPlus(c+".t",i.toInt) else CMinus(c+".t",i.toInt)} |
+    identifier<~".t" ^^ {c => Clock(c+".t")} |
+    int ^^ {i => CInt(i.toInt)}
+
 
 }

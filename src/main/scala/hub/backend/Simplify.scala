@@ -35,9 +35,9 @@ object Simplify {
 
   def apply(hub: HubAutomata): HubAutomata = hub match {
     case HubAutomata(ports, sts, init, trans, clocks, inv, initVal,taskPorts) =>
-      val nInv = inv.map(i => i._1 -> ifta.analyse.Simplify(i._2))
+      val nInv = inv.map(i => i._1 -> Simplify(i._2))
       val nTrans = for ((from, (to, fire, g, cc, cr, upd, es)) <- trans) yield
-        (from, (to, fire, Simplify(g), ifta.analyse.Simplify(cc), cr, Simplify(upd), es))
+        (from, (to, fire, Simplify(g), Simplify(cc), cr, Simplify(upd), es))
       HubAutomata(ports, sts, init, nTrans, clocks, nInv, initVal,taskPorts)
   }
 
@@ -69,6 +69,13 @@ object Simplify {
     case Pred(_, _) => g
   }
 
+  def apply(cc:CCons):CCons = cc match {
+    case CTrue | ET(_,_) | LT(_,_) | GT(_,_) | LE(_,_) | GE(_,_) => cc
+    case CAnd(CTrue, cc2) => apply(cc2)
+    case CAnd(cc1, CTrue) => apply(cc1)
+    case CAnd(cc1, cc2) => CAnd(apply(cc1),apply(cc2))
+  }
+
   def apply(f:TemporalFormula):TemporalFormula = f match {
     case AA(sf) => AA(apply(sf))
     case AE(sf) => AE(apply(sf))
@@ -86,7 +93,7 @@ object Simplify {
     case a@DoingAction(n) => a
     case TFTrue => TFTrue
     case DGuard(g)=> DGuard(apply(g))
-    case CGuard(c)=> CGuard(ifta.analyse.Simplify(c))
+    case CGuard(c)=> CGuard(Simplify(c))
     case Not(Not(f)) => apply(f)
     case Not(f) => Not(apply(f))
 //    case Can(f) => Can(apply(f))
@@ -135,7 +142,7 @@ object Simplify {
     case Location(n) => sf
     case UTrue => UTrue
     case UDGuard(g)=> UDGuard(apply(g))
-    case UCGuard(c)=> UCGuard(ifta.analyse.Simplify(c))
+    case UCGuard(c)=> UCGuard(Simplify(c))
     case UNot(UNot(f)) => apply(f)
     case UNot(f) => UNot(apply(f))
     case UAnd(f1,f2) => (apply(f1),apply(f2)) match {
