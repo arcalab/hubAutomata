@@ -72,6 +72,7 @@ object Show {
     case TFTrue => "true"
     case Action(a) => a
     case DoingAction(a) => "doing " + a
+    case DoneAction(a) =>  a +".done"
     case DGuard(g) => apply(g)
     case CGuard(g) => apply(g)
 //    case Can(f1) => "can ("+apply(f1)+")"

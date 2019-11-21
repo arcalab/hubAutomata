@@ -89,8 +89,9 @@ object Simplify {
   def apply(sf: StFormula):StFormula = sf match {
     case Deadlock => Deadlock
     case Nothing => Nothing
-    case a@Action(n) => a
-    case a@DoingAction(n) => a
+    case Action(n) => sf
+    case DoingAction(n) => sf
+    case DoneAction(n) => sf
     case TFTrue => TFTrue
     case DGuard(g)=> DGuard(apply(g))
     case CGuard(c)=> CGuard(Simplify(c))

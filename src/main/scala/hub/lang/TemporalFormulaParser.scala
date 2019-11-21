@@ -57,6 +57,7 @@ object TemporalFormulaParser extends RegexParsers {
     deadlock |
 //    """nothing""".r ^^ { _ => Nothing} |
     "doing"~>identifier ^^ DoingAction |
+    identifier<~".done" ^^ {DoneAction(_)} |
     identifier~"waits"~waitMode~int ^^ {case id~_~mode~t => Waits(Action(id),mode,t.toInt)} |
     identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
     identifier ^^ Action

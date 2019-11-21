@@ -134,16 +134,18 @@ object Uppaal {
       var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
       // set false for all variables that do not belong to acts unless tau transition
       var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+      // set to true all variables that capture first_a for a an action in acts
+      var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
+      newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
       // second part of the edge, from the new committed state
-//      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)//executions)
+      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds)//executions)
       // accumulate new committed state
-//      committed += (maxloc+1)
+      committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
-//      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
       // new max location number
-//      maxloc +=1
+      maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
 //      if(from==hub.init)
 //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
@@ -680,7 +682,7 @@ object Uppaal {
       case And(f1,f2)     => UAnd(mkFirstOf(f1),mkFirstOf(f2))
       case Or(f1,f2)      => UOr(mkFirstOf(f1),mkFirstOf(f2))
       case Imply(f1,f2)   => UImply(mkFirstOf(f1),mkFirstOf(f2))
-      case DoingAction(a) => throw new FormulaException("Cannot make a firstTime clause of a Doing an action clause.")
+      case DoingAction(_) | DoneAction(_) => throw new FormulaException("Cannot make a firstTime clause of a Doing/Done an action clause.")
       case Until(f1,f2)   => throw new FormulaException("Cannot make a firstTime clause of a Until clause.")
       case Before(f1,f2)  => throw new FormulaException("Cannot make a firstTime clause of a Before clause.")
     }
@@ -694,6 +696,7 @@ object Uppaal {
           UAnd(stf2UStF(DoingAction(a)),UCGuard(ET("t"+act2port(a),CInt(0))))
         else throw new FormulaException("Unknown port name: " + a)
       case DoingAction(a) => UDGuard(Pred("==", List(Var("port" + a), Val(1))))
+      case DoneAction(a) => UDGuard(Pred("==", List(Var("vfirst" + a), Val(1))))
       case DGuard(g) => UDGuard(g)
       case CGuard(g) => UCGuard(expandCCons(g,act2port))
       //case Can(f1) => UOr(Location("Hub.L"+portToString(initState)),stf2UStF(f1)) //mkCan(f1)
