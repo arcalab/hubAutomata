@@ -65,11 +65,11 @@ object Uppaal {
     // get all variables to declare
     var vars:Set[Var] = uppaals.flatMap(u=> u.edges.map(e=>e.upd).flatMap(u=>u.vars))
     // ignore for know other variables that were not created for verification purposes
-    var vvars:Set[Var] = vars.filter(v=>v.name.startsWith("v"))
-    var portvars:Set[Var] = vars.filter(v=>v.name.startsWith("port"))
-    var intvars:Set[Var] = vars.filter(v=>v.name.startsWith("int"))
+    var vvars:Set[Var] = vars.filter(v=>v.name.startsWith("done"))
+    var portvars:Set[Var] = vars.filter(v=>v.name.startsWith("P"))
+    var intvars:Set[Var] = vars.filter(v=>v.name.startsWith("since"))
     // initialize variables (just ports for now)
-    var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("port"))
+    var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("P"))
     portvars = portvars -- initVars.map(i=>i._1)
     val channels:Set[String] = uppaals.flatMap(u=> u.edges).flatMap(e=>e.ports).filter(p=> p.endsWith("!") || p.endsWith("?"))
     s"""<?xml version="1.0" encoding="utf-8"?>
@@ -131,15 +131,15 @@ object Uppaal {
     for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
       var names = acts.map(hub.getPortName)
       // set all true to all variables named as the actions (to keep track of when an action fire)
-      var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+      var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
       // set false for all variables that do not belong to acts unless tau transition
-      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
       // set to true all variables that capture first_a for a an action in acts
-      var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
+      var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts)//u)
+      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g,tacts & facts)//u)
       // second part of the edge, from the new committed state
-      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds)//executions)
+      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
       committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
@@ -150,11 +150,44 @@ object Uppaal {
 //      if(from==hub.init)
 //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
     }
-    val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+    val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
 
     Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
-
   }
+
+//  private def mkWithCommitted(hub:HubAutomata):Uppaal = {
+//    var newedges = Set[UppaalEdge]()
+//    var committed = Set[Int]()
+//    var act2locs = Map[Int,Set[Int]]()
+//    var maxloc = hub.sts.max
+//    var initVal:Set[(Var,Expr)] = Set()
+//
+//    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
+//      var names = acts.map(hub.getPortName)
+//      // set all true to all variables named as the actions (to keep track of when an action fire)
+//      var tacts = names.map(a => Asg(Var(a),Val(1))).foldRight[Update](Noop)(_&_)
+//      // set false for all variables that do not belong to acts unless tau transition
+//      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(a),Val(0))).foldRight[Update](Noop)(_&_)
+//      // set to true all variables that capture first_a for a an action in acts
+//      var firstUpds = names.map(a => Asg(Var(a),Val(1))).foldRight[Update](Noop)(_&_)
+//      // first part of the edge, to a new committed state
+//      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g, tacts & facts)//u)
+//      // second part of the edge, from the new committed state
+//      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
+//      // accumulate new committed state
+//      committed += (maxloc+1)
+//      // add a new map from acts to the new committed state (state where those acts are true)
+//      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//      // new max location number
+//      maxloc +=1
+//      // initialize port variables to true if this edge goes out of the initial location
+//      //      if(from==hub.init)
+//      //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//    }
+//    val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
+//
+//    Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
+//  }
 
   /**
     * Given a formula and a hub automaton, create an uppaal model with the necessary structures to verify such formula
@@ -167,13 +200,13 @@ object Uppaal {
     if (validFormula(tf,hub))
       tf match {
     //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-      case f if f.waitModes.intersect(Set(AtLeast,MoreThan)).nonEmpty => Set(mkWithCommitted(Simplify(hub)))
+      //case f if f.waitModes.intersect(Set(AtLeast,MoreThan)).nonEmpty => Set(mkWithCommitted(Simplify(hub)))
       case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
       case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
       case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
       case f@Eventually(f1, Until(f2,f3)) =>
           throw new FormulaException("Only an action is supported on the left and right side of an eventually until clause")
-      case f@Eventually(Action(name),Before(f2,f3)) => Set(fromEventuallyBefore(f,Simplify(hub)))
+//      case f@Eventually(Action(name),Before(f2,f3)) => Set(fromEventuallyBefore(f,Simplify(hub)))
       case f@Eventually(f1,Before(f2,f3)) =>
         throw new FormulaException("Only an action is supported on the left side of an eventually before clause")
       case formula => Set(mkTimeAutomata(Simplify(hub)))
@@ -253,40 +286,6 @@ object Uppaal {
     case _ => Show(e)
   }
 
-  private def mkWithCommitted(hub:HubAutomata):Uppaal = {
-    var newedges = Set[UppaalEdge]()
-    var committed = Set[Int]()
-    var act2locs = Map[Int,Set[Int]]()
-    var maxloc = hub.sts.max
-    var initVal:Set[(Var,Expr)] = Set()
-
-    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
-      var names = acts.map(hub.getPortName)
-      // set all true to all variables named as the actions (to keep track of when an action fire)
-      var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
-      // set false for all variables that do not belong to acts unless tau transition
-      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
-      // set to true all variables that capture first_a for a an action in acts
-      var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-      // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g, tacts & facts)//u)
-      // second part of the edge, from the new committed state
-      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds)//executions)
-      // accumulate new committed state
-      committed += (maxloc+1)
-      // add a new map from acts to the new committed state (state where those acts are true)
-      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
-      // new max location number
-      maxloc +=1
-      // initialize port variables to true if this edge goes out of the initial location
-      //      if(from==hub.init)
-      //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
-    }
-    val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
-
-    Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
-  }
-
   private def fromEvery(pre:Action,post:Action,hub:HubAutomata):Uppaal = {
       val hubedges = hub.getTransitions
 
@@ -299,30 +298,30 @@ object Uppaal {
       for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
         var names:Set[String] = acts.map(hub.getPortName)
         // set true to all variables named as the actions (to keep track of when an action fire)
-        var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // set false for all variables that do not belong to acts unless tau transiton
-        var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+        var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
         // experimenting with setting if an action executed before another action executes
         var executions,executions1,executions2:Update = Noop
-        val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.name).get
-        val postPort = hub.ports.find(a=> hub.getPortName(a)== post.name).get
+        //val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.name).get
+        //val postPort = hub.ports.find(a=> hub.getPortName(a)== post.name).get
         (names.contains(pre.name),names.contains(post.name)) match {
           case (true,false) =>
-            executions = increaseSince(prePort,postPort)
+            executions = increaseSince(pre.name,post.name)
           case (false,true) =>
-            executions = decreaseSince(prePort,postPort)
+            executions = decreaseSince(pre.name,post.name)
           case (true,true) =>
-            executions1 = increaseSince(prePort,postPort)
-            executions2 = decreaseSince(prePort,postPort)
+            executions1 = increaseSince(pre.name,post.name)
+            executions2 = decreaseSince(pre.name,post.name)
           case _ => ()
         }
         // set to true all variables that capture first_a for a an action in acts
-        var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts & executions1)//u)
+        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g,tacts & facts & executions1)//u)
 //        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
-        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds & executions & executions2)
+        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds & executions & executions2)
 //        // accumulate committed states
         committed += (maxloc+1)
 //        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
@@ -333,69 +332,32 @@ object Uppaal {
 //        //        if(from==hub.init)
 //        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
-      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+      val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
 
       Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
   }
 
-  private def increaseSince(a:Int,b:Int):Update =
-    Asg(Var(mkSinceName(a,b)), Fun("&lt;?",List(Fun("+",List(Var(mkSinceName(a,b)),Val(1))),Val(2))))
-  private def decreaseSince(a:Int,b:Int):Update =
-      Asg(Var(mkSinceName(a,b)),Fun("&gt;?",List(Fun("-",List(Var(mkSinceName(a,b)),Val(1))),Val(0))))
-  private def mkSinceName(a:Int,b:Int):String =
-    "int"+portToString(a)+"_"+portToString(b)
-  private def mkDoneName(a:Int):String = "vfirst"+portToString(a) //todo: change to done
+  private def increaseSince(a:String,b:String):Update =
+    Asg(Var(since(a,b)), Fun("&lt;?",List(Fun("+",List(Var(since(a,b)),Val(1))),Val(2))))
 
-//  private def fromEveryAfter(f:EveryAfter,hub:HubAutomata):Set[Uppaal] = f match {
-//    case EveryAfter(a, b, t) =>
-//      val hubedges = hub.getTransitions
-//
-//      var newedges = Set[UppaalEdge]()
-//      var committed = Set[Int]()
-//      var act2locs = Map[Int,Set[Int]]()
-//      //      var maxloc = hub.sts.max
-//      var initVal:Set[(Var,Expr)] = Set()
-//
-//      //      val (facts,fccons) = collectFirstOf(f3)
-//
-//      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
-//        var names = acts.map(hub.getPortName)
-//        // set all true to all variables named as the actions (to keep track of when an action fire)
-//        var trueActs = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
-//        // set false for all variables that do not belong to acts
-//        var falseActs = (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
-//        // set to true all variables that capture first_a for a an action in acts
-//        //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-//        var firstUpds = if (names.contains(b.a)) Asg(Var("vfirst"+b.a),Val(1)) else Noop
-//        // if in this edge action a happens then reset first of b and clock cons t
-//        val (resetfirsts,resetSignal) = if (names.contains(a.a)) (Asg(Var("vfirst"+b.a),Val(0)),Set("reset"+cc2Name(GE(a.a,t))+"!")) else (Noop,Set())
-//
-//        // first part of the edge, to a new committed state
-//        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a))++resetSignal,
-//          cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & firstUpds & trueActs & falseActs)//u)
-//        // second part of the edge, from the new committed state
-//        //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
-//        // committed states accumulated
-//        //        committed += (maxloc+1)
-//        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-//        //        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
-//        // new max location number
-//        //        maxloc +=1
-//        // initialize port variables to true if this edge goes out of the initial location
-//        //        if(from==hub.init)
-//        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
-//      }
-//      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
-//
-//      //observer automaton for each clock constraint that needs to be track when is first satisfied
-//      val observer:Uppaal = mkObserver(GE(a.a,t),true)
-//
-//      // main uppaal automaton for the hub
-//      val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
-//
-//      //      observers+hubAut
-//      Set(hubAut,observer)
-//  }
+  private def decreaseSince(a:String,b:String):Update =
+     Asg(Var(since(a,b)),Fun("&gt;?",List(Fun("-",List(Var(since(a,b)),Val(1))),Val(0))))
+
+  private def done(a:String):String = "done"+a
+
+  private def port(a:String):String = "P"+a
+
+  private def since(a:String,b:String):String = "since"+a+"_"+b
+
+  private def chan(a:String):String = "ch"+a
+
+  private def clock(a:String):String = "t"+a
+
+  //  private def mkSinceName(a:Int,b:Int):String =
+  //    "int"+portToString(a)+"_"+portToString(b)
+
+  //private def mkDoneName(a:Int):String = "vfirst"+portToString(a) //todo: change to done
+
 
   private def fromUntil(f:Until,hub:HubAutomata):Set[Uppaal] =  f match {
     case Until(f1,f2) =>
@@ -412,13 +374,13 @@ object Uppaal {
       for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
         var names = acts.map(hub.getPortName)
         // set all true to all variables named as the actions (to keep track of when an action fire)
-        var trueActs = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var trueActs = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // set false for all variables that do not belong to acts unless tau transition
-        var falseActs = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+        var falseActs = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
         // set to true all variables that capture first_a for a an action in acts
-        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var firstUpds = names.intersect(facts).map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => clock(a)),g,firstUpds & trueActs & falseActs)//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
         // committed states accumulated
@@ -431,7 +393,7 @@ object Uppaal {
 //        if(from==hub.init)
 //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
-      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+      val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
 
       //observer automaton for each clock constraint that needs to be track when is first satisfied
       val observers:Set[Uppaal] = fccons.map(cc=> mkObserver(cc))
@@ -457,18 +419,18 @@ object Uppaal {
       for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
         var names = acts.map(hub.getPortName)
         // set all true to all variables named as the actions (to keep track of when an action fire)
-        var trueActs = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+        var trueActs = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // set false for all variables that do not belong to acts unless tau transition
-        var falseActs = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+        var falseActs = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
         // set to true all variables that capture first_a for a an action in acts
 //        var firstUpds = names.intersect(facts).map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        var firstUpds = if (names.contains(b)) Asg(Var("vfirst"+b),Val(1)) else Noop
+        var firstUpds = if (names.contains(b)) Asg(Var(done(b)),Val(1)) else Noop
 //        println("firstUps: "+ firstUpds)
         // if in this edge action a happens then reset first of
-        var resetfirsts = if (names.contains(a)) Asg(Var("vfirst"+b),Val(0)) else Noop
+        var resetfirsts = if (names.contains(a)) Asg(Var(done(b)),Val(0)) else Noop
 //        println("resetFirst: "+ resetfirsts)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
+        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => chan(a)),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
         // committed states accumulated
@@ -481,7 +443,7 @@ object Uppaal {
         //        if(from==hub.init)
         //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
       }
-      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+      val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
 
       // main uppaal automaton for the hub
       val hubAut = Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal.toMap,"Hub")
@@ -494,56 +456,56 @@ object Uppaal {
   }
 
 
-  private def fromEventuallyBefore(tf:Eventually,hub:HubAutomata):Uppaal = tf match {
-    case Eventually(Action(name),Before(f2,f3))=>
-      val hubedges = hub.getTransitions
-
-      var newedges = Set[UppaalEdge]()
-      var committed = Set[Int]()
-      var act2locs = Map[Int,Set[Int]]()
-      var maxloc = hub.sts.max
-      var initVal:Set[(Var,Expr)] = Set()
-
-      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
-        var names:Set[String] = acts.map(hub.getPortName)
-        // set true to all variables named as the actions (to keep track of when an action fire)
-        var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        // set false for all variables that do not belong to acts unless tau transition
-        var facts = if (acts.isEmpty) Noop else  (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
-        // experimenting with setting if an action executed before another action executes
-        var executions:Update = Noop
-        if (names.contains(name)) { // condition c is satisfied in  c --> c1 before c2, reset everything
-          executions = (for(a1<-hub.ports;a2<-hub.ports;if a1!=a2) yield {
-            Asg(Var("v"+portToString(a1)+"_"+portToString(a2)),Val(0))
-          }).foldRight[Update](Noop)(_&_)
-        } else { // condition c is not satisfied in  c --> c1 before c2, updated executions accordingly
-          executions = (for( a<-acts;other<-hub.ports; if a!=other) yield {
-            Asg(Var("v"+portToString(a)+"_"+portToString(other)),Val(1))
-          }).foldRight[Update](Noop)(_&_)
-          executions = executions & (for(a<-acts;other<-hub.ports; if a!=other) yield {
-            Asg(Var("v"+portToString(other)+"_"+portToString(a)),Val(0))
-          }).foldRight[Update](Noop)(_&_)
-        }
-        // set to true all variables that capture first_a for a an action in acts
-        var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
-        // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,firstUpds & tacts & facts)//u)
-        // second part of the edge
-        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
-        // accumulate committed states
-        committed += (maxloc+1)
-        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
-        // new max location
-        maxloc +=1
-        // initialize port variables to true if this edge goes out of the initial location
-        //        if(from==hub.init)
-        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
-      }
-      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
-
-      Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
-  }
+//  private def fromEventuallyBefore(tf:Eventually,hub:HubAutomata):Uppaal = tf match {
+//    case Eventually(Action(name),Before(f2,f3))=>
+//      val hubedges = hub.getTransitions
+//
+//      var newedges = Set[UppaalEdge]()
+//      var committed = Set[Int]()
+//      var act2locs = Map[Int,Set[Int]]()
+//      var maxloc = hub.sts.max
+//      var initVal:Set[(Var,Expr)] = Set()
+//
+//      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+//        var names:Set[String] = acts.map(hub.getPortName)
+//        // set true to all variables named as the actions (to keep track of when an action fire)
+//        var tacts = names.map(a => Asg(Var("port"+a),Val(1))).foldRight[Update](Noop)(_&_)
+//        // set false for all variables that do not belong to acts unless tau transition
+//        var facts = if (acts.isEmpty) Noop else  (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
+//        // experimenting with setting if an action executed before another action executes
+//        var executions:Update = Noop
+//        if (names.contains(name)) { // condition c is satisfied in  c --> c1 before c2, reset everything
+//          executions = (for(a1<-hub.ports;a2<-hub.ports;if a1!=a2) yield {
+//            Asg(Var("v"+portToString(a1)+"_"+portToString(a2)),Val(0))
+//          }).foldRight[Update](Noop)(_&_)
+//        } else { // condition c is not satisfied in  c --> c1 before c2, updated executions accordingly
+//          executions = (for( a<-acts;other<-hub.ports; if a!=other) yield {
+//            Asg(Var("v"+portToString(a)+"_"+portToString(other)),Val(1))
+//          }).foldRight[Update](Noop)(_&_)
+//          executions = executions & (for(a<-acts;other<-hub.ports; if a!=other) yield {
+//            Asg(Var("v"+portToString(other)+"_"+portToString(a)),Val(0))
+//          }).foldRight[Update](Noop)(_&_)
+//        }
+//        // set to true all variables that capture first_a for a an action in acts
+//        var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
+//        // first part of the edge
+//        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,firstUpds & tacts & facts)//u)
+//        // second part of the edge
+//        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,executions)
+//        // accumulate committed states
+//        committed += (maxloc+1)
+//        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
+//        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//        // new max location
+//        maxloc +=1
+//        // initialize port variables to true if this edge goes out of the initial location
+//        //        if(from==hub.init)
+//        //          initVal++= names.map(a=>(Var("port"+a),Val(1)))
+//      }
+//      val actclocks = hub.ports.map(p => s"t${if (p>=0) p.toString else "_"+Math.abs(p).toString}")
+//
+//      Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
+//  }
 
   /**
     * Create an observer automaton to keep track of when cc becomes true for the first time
@@ -659,7 +621,7 @@ object Uppaal {
         var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          part1 = UImply(part1,UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))))
+          part1 = UImply(part1,UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))))
         } else throw new FormulaException("Action name not found: " + b)
         List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case EveryAfter(a,b,t) =>
@@ -667,7 +629,7 @@ object Uppaal {
         var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var("int"+portToString(act2port(a.name))+"_"+portToString(act2port(b.name))),Val(1)))),UNot(UCGuard(LT("t"+act2port(a.name),CInt(t))))))
+          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))),UNot(UCGuard(LT(clock(a.name),CInt(t))))))
         } else throw new FormulaException("Action name not found: " + b)
         List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
@@ -680,9 +642,9 @@ object Uppaal {
 
     def mkFirstOf(f:StFormula):UppaalStFormula = f match {
       case Deadlock       => UDeadlock
-      case Nothing        => UDGuard(act2port.map(a => Pred("==",List(Var("vfirst"+a._1),Val(0)))).foldRight[Guard](Ltrue)(_&&_))
+      case Nothing        => UDGuard(act2port.map(a => Pred("==",List(Var(done(a._1)),Val(0)))).foldRight[Guard](Ltrue)(_&&_))
       case TFTrue         => UTrue
-      case Action(a)      => UDGuard(Pred("==",List(Var("vfirst"+a),Val(1))))
+      case Action(a)      => UDGuard(Pred("==",List(Var(done(a)),Val(1))))
       case DGuard(g)      => UDGuard(g) //todo: see what this should actually be when adding data guards to uppaal
       case CGuard(c)      =>
         val ccons = collectCCons(c)
@@ -699,14 +661,14 @@ object Uppaal {
 
     def stf2UStF(st: StFormula): UppaalStFormula = st match {
       case Deadlock => UDeadlock
-      case Nothing        => UDGuard(act2port.map(a => Pred("==",List(Var("port"+a._1),Val(0)))).foldRight[Guard](Ltrue)(_&&_))
+      case Nothing        => UDGuard(act2port.map(a => Pred("==",List(Var(port(a._1)),Val(0)))).foldRight[Guard](Ltrue)(_&&_))
       case TFTrue => UTrue
       case Action(a) =>
         if (act2port.isDefinedAt(a))
-          UAnd(stf2UStF(DoingAction(a)),UCGuard(ET("t"+act2port(a),CInt(0))))
+          UAnd(stf2UStF(DoingAction(a)),UCGuard(ET(clock(a),CInt(0))))
         else throw new FormulaException("Unknown port name: " + a)
-      case DoingAction(a) => UDGuard(Pred("==", List(Var("port" + a), Val(1))))
-      case DoneAction(a) => UDGuard(Pred("==", List(Var("vfirst" + a), Val(1))))
+      case DoingAction(a) => UDGuard(Pred("==", List(Var(port(a)), Val(1))))
+      case DoneAction(a) => UDGuard(Pred("==", List(Var(done(a)), Val(1))))
       case DGuard(g) => UDGuard(g)
       case CGuard(g) => UCGuard(expandCCons(g,act2port))
       //case Can(f1) => UOr(Location("Hub.L"+portToString(initState)),stf2UStF(f1)) //mkCan(f1)
@@ -734,10 +696,10 @@ object Uppaal {
     }
 
     def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast  => UCGuard(GE("t"+act2port(a.name),CInt(t)))
-      case AtMost   => UCGuard(LE("t"+act2port(a.name),CInt(t)))
-      case MoreThan => UCGuard(GT("t"+act2port(a.name),CInt(t)))
-      case LessThan => UCGuard(LT("t"+act2port(a.name),CInt(t)))
+      case AtLeast  => UCGuard(GE(clock(a.name),CInt(t)))
+      case AtMost   => UCGuard(LE(clock(a.name),CInt(t)))
+      case MoreThan => UCGuard(GT(clock(a.name),CInt(t)))
+      case LessThan => UCGuard(LT(clock(a.name),CInt(t)))
     }
 
     if (formula.actions.isEmpty || act2port.map(_._1).toSet.intersect(formula.actions).nonEmpty)
@@ -771,7 +733,7 @@ object Uppaal {
     */
   private def changeClock(c:String,act2port:Map[String,Int]):String = {
     if (!c.endsWith(".t")) c
-    else if (act2port.isDefinedAt(c.dropRight(2))) "t"+portToString(act2port(c.dropRight(2)))
+    else if (act2port.isDefinedAt(c.dropRight(2))) clock(c.dropRight(2)) //"t"+portToString(act2port(c.dropRight(2)))
     else throw new RuntimeException("Action name not found: "+c)
   }
 
@@ -819,18 +781,18 @@ object Uppaal {
     // for now only auxiliary variables to verify things like a doesn't executes more than once before b
     // ignore other variables for now
     vs = vs.filter(v=>v.name.startsWith("v"))
-    val invs = vs.filter(v=>v.name.startsWith("int"))
+    val ints = vs.filter(v=>v.name.startsWith("since"))
     //if (vs.nonEmpty) "int[0,2] "+vs.map(Show(_)).mkString("",",",";") else ""
     if (vs.nonEmpty) "bool "+vs.map(Show(_)).mkString("",",",";\n") else ""
-    if (invs.nonEmpty) "int[0,2] "+invs.map(Show(_)).mkString("",",",";\n") else ""
+    if (ints.nonEmpty) "int[0,2] "+ints.map(Show(_)).mkString("",",",";\n") else ""
   }
 
   private def mkVariables(vars: Set[Var]):String = {
     // all booleans for know
-    val boolvs = vars.filterNot(v=>v.name.startsWith("int"))
-    val intvs = vars.filter(v=>v.name.startsWith("int"))
-    (if (boolvs.nonEmpty) "bool "+boolvs.map(Show(_)).mkString("",",",";\n") else "") +
-      (if (intvs.nonEmpty) "int[0,2] "+intvs.map(Show(_)).mkString("",",",";\n") else "")
+    val bools = vars.filterNot(v=>v.name.startsWith("since"))
+    val ints = vars.filter(v=>v.name.startsWith("since"))
+    (if (bools.nonEmpty) "bool "+bools.map(Show(_)).mkString("",",",";\n") else "") +
+      (if (ints.nonEmpty) "int[0,2] "+ints.map(Show(_)).mkString("",",",";\n") else "")
   }
 
   private def mkLocation(loc:Int,inv:CCons,committed:Boolean):String = {
