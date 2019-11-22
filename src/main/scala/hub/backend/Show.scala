@@ -44,7 +44,7 @@ object Show {
     case GT(c, expr) => s"$c >= ${Show(expr)}"
     case LE(c, expr) => s"$c <= ${Show(expr)}"
     case GE(c, expr) => s"$c > ${Show(expr)}"
-    case CAnd(cc1, cc2) => Show(cc1) + "and" + Show(cc2)
+    case CAnd(cc1, cc2) => Show(cc1) + " and " + Show(cc2)
   }
 
   def apply(cexpr:ClockExpr):String = cexpr match {

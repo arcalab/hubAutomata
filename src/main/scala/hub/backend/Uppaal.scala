@@ -183,9 +183,7 @@ object Uppaal {
 
   private def validFormula(tf:TemporalFormula,hub:HubAutomata):Boolean = {
     val hubPorts = hub.ports.map(hub.getPortName)
-    println(tf.actions)
     tf.actions.forall(a => hubPorts.contains(a))
-
   }
 
   // make queries template to save queries in xml file
@@ -736,8 +734,8 @@ object Uppaal {
     }
 
     def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast => UCGuard(GE("t"+act2port(a.name),CInt(t)))
-      case AtMost => UCGuard(LE("t"+act2port(a.name),CInt(t)))
+      case AtLeast  => UCGuard(GE("t"+act2port(a.name),CInt(t)))
+      case AtMost   => UCGuard(LE("t"+act2port(a.name),CInt(t)))
       case MoreThan => UCGuard(GT("t"+act2port(a.name),CInt(t)))
       case LessThan => UCGuard(LT("t"+act2port(a.name),CInt(t)))
     }

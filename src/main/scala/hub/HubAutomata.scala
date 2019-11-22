@@ -496,7 +496,9 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
   /** List transitions in a pretty-print. */
   //TODO: show updates and guards as well
   def show: String =
-    s"$init - ${ports.mkString(",")}:\n"+trans.map(x=>s" - ${x._1}->${x._2._1} "+
+    s"$init - ${ports.mkString(",")}:\n"+
+      s"InTask:${taskPort._1.map(p=>getPortName(p)).mkString(",")}\n"+
+      s"OutTask:${taskPort._2.map(p=>getPortName(p)).mkString(",")}\n"+trans.map(x=>s" - ${x._1}->${x._2._1} "+
       s"${x._2._2.toList.sorted.mkString("[",",","]")} "+
       s"${x._2._7.toList.map(x=>x.prim.name + (x.ins++x.outs).mkString("{",",","}")).sorted.mkString("(",",",")")}").mkString("\n")
 
@@ -998,6 +1000,8 @@ object HubAutomata {
         yield mkState(l1, l2) -> CAnd(renameClocks(a1.inv.withDefaultValue(CTrue)(l1),1),
           renameClocks(a2.inv.withDefaultValue(CTrue)(l2),2))).toMap
 
+//      println("Ports to preserve a1:"+(a1.taskPort._1++a1.taskPort._2).map(p=> p+"="+a1.getPortName(p)).mkString(","))
+//      println("Ports to preserve a2:"+(a2.taskPort._1++a2.taskPort._2).map(p=> p+"="+a2.getPortName(p)).mkString(","))
       val res1 = HubAutomata(newPorts
         , for (l1<-a1.sts; l2<-a2.sts) yield mkState(l1, l2)
         , mkState(a1.init, a2.init)
