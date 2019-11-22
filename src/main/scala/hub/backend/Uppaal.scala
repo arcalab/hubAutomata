@@ -304,7 +304,7 @@ object Uppaal {
         // set false for all variables that do not belong to acts unless tau transiton
         var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var("port"+a),Val(0))).foldRight[Update](Noop)(_&_)
         // experimenting with setting if an action executed before another action executes
-        var executions:Update = Noop
+        var executions,executions1,executions2:Update = Noop
         val prePort = hub.ports.find(a=> hub.getPortName(a)== pre.name).get
         val postPort = hub.ports.find(a=> hub.getPortName(a)== post.name).get
         (names.contains(pre.name),names.contains(post.name)) match {
@@ -313,18 +313,17 @@ object Uppaal {
           case (false,true) =>
             executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
           case (true,true) =>
-            val executions1 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
-            val executions2 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
-            executions = executions1 & executions2
+            executions1 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
+            executions2 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
           case _ => ()
         }
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts)//u)
+        newedges += UppaalEdge(from,maxloc+1,acts.map(a=>"ch"+portToString(a)),cc,cr,g,tacts & facts & executions1)//u)
 //        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
-        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds & executions)
+        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,firstUpds & executions & executions2)
 //        // accumulate committed states
         committed += (maxloc+1)
 //        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
