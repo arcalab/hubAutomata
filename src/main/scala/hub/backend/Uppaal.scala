@@ -312,7 +312,11 @@ object Uppaal {
             executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
           case (false,true) =>
             executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
-          case _=> ()
+          case (true,true) =>
+            val executions1 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
+            val executions2 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
+            executions = executions1 & executions2
+          case _ => ()
         }
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.map(a => Asg(Var("vfirst"+a),Val(1))).foldRight[Update](Noop)(_&_)
