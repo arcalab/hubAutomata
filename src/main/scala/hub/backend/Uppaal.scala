@@ -183,6 +183,7 @@ object Uppaal {
 
   private def validFormula(tf:TemporalFormula,hub:HubAutomata):Boolean = {
     val hubPorts = hub.ports.map(hub.getPortName)
+    println(tf.actions)
     tf.actions.forall(a => hubPorts.contains(a))
 
   }
@@ -309,12 +310,12 @@ object Uppaal {
         val postPort = hub.ports.find(a=> hub.getPortName(a)== post.name).get
         (names.contains(pre.name),names.contains(post.name)) match {
           case (true,false) =>
-            executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
+            executions = increaseSince(prePort,postPort)
           case (false,true) =>
-            executions = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
+            executions = decreaseSince(prePort,postPort)
           case (true,true) =>
-            executions1 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&lt;?",List(Fun("+",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(2))))
-            executions2 = Asg(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Fun("&gt;?",List(Fun("-",List(Var("int"+portToString(prePort)+"_"+portToString(postPort)),Val(1))),Val(0))))
+            executions1 = increaseSince(prePort,postPort)
+            executions2 = decreaseSince(prePort,postPort)
           case _ => ()
         }
         // set to true all variables that capture first_a for a an action in acts
@@ -338,6 +339,14 @@ object Uppaal {
 
       Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
   }
+
+  private def increaseSince(a:Int,b:Int):Update =
+    Asg(Var(mkSinceName(a,b)), Fun("&lt;?",List(Fun("+",List(Var(mkSinceName(a,b)),Val(1))),Val(2))))
+  private def decreaseSince(a:Int,b:Int):Update =
+      Asg(Var(mkSinceName(a,b)),Fun("&gt;?",List(Fun("-",List(Var(mkSinceName(a,b)),Val(1))),Val(0))))
+  private def mkSinceName(a:Int,b:Int):String =
+    "int"+portToString(a)+"_"+portToString(b)
+  private def mkDoneName(a:Int):String = "vfirst"+portToString(a) //todo: change to done
 
 //  private def fromEveryAfter(f:EveryAfter,hub:HubAutomata):Set[Uppaal] = f match {
 //    case EveryAfter(a, b, t) =>
@@ -733,16 +742,7 @@ object Uppaal {
       case LessThan => UCGuard(LT("t"+act2port(a.name),CInt(t)))
     }
 
-//    def mkCan(sf: StFormula):UppaalStFormula = sf match {
-//      case Action(a) =>  UOr(Location("Hub.L"+portToString(initState)),UDGuard(Pred("==", List(Var("port" + a), Val(1)))))
-//      case And(f1,f2)=> UAnd(mkCan(f1),mkCan(f2))
-//      case Or(f1,f2) => UOr(mkCan(f1),mkCan(f2))
-//      case Imply(f1,f2) => UImply(mkCan(f1),mkCan(f2))
-//      case Not(f1) => UNot(mkCan(f1))
-//      case _ => throw new FormulaException("Only simple logic expressions over actions are allowed inside a Can clause - in: "+Show(sf))
-//    }
-
-    if (act2port.map(_._1).toSet.intersect(formula.actions).nonEmpty)
+    if (formula.actions.isEmpty || act2port.map(_._1).toSet.intersect(formula.actions).nonEmpty)
       tf2UF(formula).map(Simplify(_))
     else throw new FormulaException("Unkown action names in formula "+ Show(formula))
   }
