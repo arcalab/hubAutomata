@@ -632,7 +632,7 @@ object HubAutomata {
           , Set(),Map(),Map(Var("c")->Val(0)))
           , seed + 1)
           case Prim(CPrim("writer", _, _, extra), List(), List(a),_) =>
-            val extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            val extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             extraInfo.find(e => e.startsWith("writes:")) match {
               case Some(s) => (HubAutomata(Set(a),
                 Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Val(s.drop(7).toInt), Set(e))),
@@ -678,7 +678,7 @@ object HubAutomata {
               , clocks,inv,Map(),(Set(),Set(b)))
               , seed + 2)
           case Prim(CPrim("await", _, _, extra), List(a,b), List(),_) =>
-            var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
               case Some(s) => s.drop(3).toInt
               case _ => 0}
@@ -736,7 +736,7 @@ object HubAutomata {
           , seed + 1)
 
       case Prim(CPrim("timer", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -748,7 +748,7 @@ object HubAutomata {
           , seed + 2)
 
       case Prim(CPrim("psync", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var period:Int =  extraInfo.find(e => e.startsWith("period:")) match {
           case Some(s) => s.drop(7).toInt
           case _ => 0}
@@ -757,7 +757,7 @@ object HubAutomata {
           , Set("p"),Map((seed)->LE("p",CInt(period))),Map())
           , seed + 1)
       case Prim(CPrim("timeout", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -768,7 +768,7 @@ object HubAutomata {
           , Set("cl"),Map(seed->LE("cl",CInt(to))),Map())
           , seed + 2)
       case Prim(CPrim("putNB", _, _, extra), List(a), List(err,ok),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -779,7 +779,7 @@ object HubAutomata {
           , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(ok)))
           , seed + 2)
       case Prim(CPrim("getNB", _, _, extra), List(in,go), List(c),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
