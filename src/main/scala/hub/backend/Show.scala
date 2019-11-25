@@ -39,11 +39,11 @@ object Show {
 
   def apply(cc:CCons):String = cc match {
     case CTrue => "true"
-    case ET(c, expr) => s"$c  == ${Show(expr)}"
+    case ET(c, expr) => s"$c == ${Show(expr)}"
     case LT(c, expr) => s"$c < ${Show(expr)}"
-    case GT(c, expr) => s"$c >= ${Show(expr)}"
+    case GT(c, expr) => s"$c > ${Show(expr)}"
     case LE(c, expr) => s"$c <= ${Show(expr)}"
-    case GE(c, expr) => s"$c > ${Show(expr)}"
+    case GE(c, expr) => s"$c >= ${Show(expr)}"
     case CAnd(cc1, cc2) => Show(cc1) + " and " + Show(cc2)
   }
 

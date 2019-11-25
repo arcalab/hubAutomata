@@ -72,6 +72,8 @@ object Uppaal {
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("P"))
     portvars = portvars -- initVars.map(i=>i._1)
     val channels:Set[String] = uppaals.flatMap(u=> u.edges).flatMap(e=>e.ports).filter(p=> p.endsWith("!") || p.endsWith("?"))
+    val simpleCh:Set[String] = channels.filterNot(_.startsWith("broadcast"))
+    val broadCh:Set[String] = channels.filter(_.startsWith("broadcast"))
     s"""<?xml version="1.0" encoding="utf-8"?>
        |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
        |<nta>
@@ -84,7 +86,11 @@ object Uppaal {
        |
        |${if (initVars.nonEmpty) initVars.map(i => "bool " + Show(Asg(i._1,i._2))).mkString("",";\n",";\n") else ""}
        |// Channels (actions)
-       |${if (channels.nonEmpty) channels.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
+       |${if (simpleCh.nonEmpty) channels.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
+       |// Broadcast Channels (actions)
+       |${if (broadCh.nonEmpty) channels.map(_.dropRight(1)).mkString("broadcast chan ", ",", ";") else ""}
+       |// Channels priority
+       |${if (broadCh.nonEmpty) s"chan priority default &lt; ${broadCh.map(_.dropRight(1)).mkString("",",",";")}" else ""}
        |</declaration>
        |${uppaals.map(mkTemplate).mkString("\n")}
        |<system>
@@ -135,17 +141,19 @@ object Uppaal {
       // set false for all variables that do not belong to acts unless tau transition
       var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
       // set to true all variables that capture first_a for a an action in acts
-      var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
+      //var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
+      // check if a fired action belongs to a task action and add a dummy broadcast to force priority
+      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,names.map(a=>chan(a))++brcast,cc,cr,g,tacts & facts)//u)
       // second part of the edge, from the new committed state
-      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
+//      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
-      committed += (maxloc+1)
+//      committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
-      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+//      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
       // new max location number
-      maxloc +=1
+//      maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
 //      if(from==hub.init)
 //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
@@ -155,39 +163,41 @@ object Uppaal {
     Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
   }
 
-//  private def mkWithCommitted(hub:HubAutomata):Uppaal = {
-//    var newedges = Set[UppaalEdge]()
-//    var committed = Set[Int]()
-//    var act2locs = Map[Int,Set[Int]]()
-//    var maxloc = hub.sts.max
-//    var initVal:Set[(Var,Expr)] = Set()
-//
-//    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
-//      var names = acts.map(hub.getPortName)
-//      // set all true to all variables named as the actions (to keep track of when an action fire)
-//      var tacts = names.map(a => Asg(Var(a),Val(1))).foldRight[Update](Noop)(_&_)
-//      // set false for all variables that do not belong to acts unless tau transition
-//      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(a),Val(0))).foldRight[Update](Noop)(_&_)
-//      // set to true all variables that capture first_a for a an action in acts
-//      var firstUpds = names.map(a => Asg(Var(a),Val(1))).foldRight[Update](Noop)(_&_)
-//      // first part of the edge, to a new committed state
-//      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g, tacts & facts)//u)
-//      // second part of the edge, from the new committed state
-//      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
-//      // accumulate new committed state
-//      committed += (maxloc+1)
-//      // add a new map from acts to the new committed state (state where those acts are true)
-//      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
-//      // new max location number
-//      maxloc +=1
-//      // initialize port variables to true if this edge goes out of the initial location
-//      //      if(from==hub.init)
-//      //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
-//    }
-//    val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
-//
-//    Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
-//  }
+  private def mkWithCommitted(hub:HubAutomata):Uppaal = {
+    var newedges = Set[UppaalEdge]()
+    var committed = Set[Int]()
+    var act2locs = Map[Int,Set[Int]]()
+    var maxloc = hub.sts.max
+    var initVal:Set[(Var,Expr)] = Set()
+
+    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
+      var names = acts.map(hub.getPortName)
+      // set all true to all variables named as the actions (to keep track of when an action fire)
+      var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
+      // set false for all variables that do not belong to acts unless tau transition
+      var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
+      // set to true all variables that capture first_a for a an action in acts
+      var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
+      // check if a fired action belongs to a task action and add a dummy broadcast to force priority
+      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
+      // first part of the edge, to a new committed state
+      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))++brcast,cc,cr,g, tacts & facts)//u)
+      // second part of the edge, from the new committed state
+      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
+      // accumulate new committed state
+      committed += (maxloc+1)
+      // add a new map from acts to the new committed state (state where those acts are true)
+      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+      // new max location number
+      maxloc +=1
+      // initialize port variables to true if this edge goes out of the initial location
+      //      if(from==hub.init)
+      //        initVal++= names.map(a=>(Var("port"+a),Val(1)))
+    }
+    val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
+
+    Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal, "Hub")
+  }
 
   /**
     * Given a formula and a hub automaton, create an uppaal model with the necessary structures to verify such formula
@@ -200,7 +210,7 @@ object Uppaal {
     if (validFormula(tf,hub))
       tf match {
     //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-      //case f if f.waitModes.intersect(Set(AtLeast,MoreThan)).nonEmpty => Set(mkWithCommitted(Simplify(hub)))
+      case f if f.waitModes.intersect(Set(AtLeast,MoreThan)).nonEmpty || f.hasDone => Set(mkWithCommitted(Simplify(hub)))
       case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
       case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
       case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
@@ -317,8 +327,10 @@ object Uppaal {
         }
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
+        // check if a fired action belongs to a task action and add a dummy broadcast to force priority
+        val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a)),cc,cr,g,tacts & facts & executions1)//u)
+        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))++brcast,cc,cr,g,tacts & facts & executions1)//u)
 //        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
         newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds & executions & executions2)
@@ -351,6 +363,8 @@ object Uppaal {
 
   private def chan(a:String):String = "ch"+a
 
+  private def broadcast():String = "broadcastSync!"
+
   private def clock(a:String):String = "t"+a
 
   //  private def mkSinceName(a:Int,b:Int):String =
@@ -358,7 +372,7 @@ object Uppaal {
 
   //private def mkDoneName(a:Int):String = "vfirst"+portToString(a) //todo: change to done
 
-
+  // todo: addapt or drop
   private def fromUntil(f:Until,hub:HubAutomata):Set[Uppaal] =  f match {
     case Until(f1,f2) =>
       val hubedges = hub.getTransitions
@@ -404,6 +418,7 @@ object Uppaal {
       observers+hubAut
   }
 
+  // todo: addapt or drop
   private def fromEventuallyUntil(f:Eventually,hub:HubAutomata):Set[Uppaal] =  f match {
     case Eventually(Action(a),Until(f2,Action(b))) =>
       val hubedges = hub.getTransitions
@@ -702,7 +717,7 @@ object Uppaal {
       case LessThan => UCGuard(LT(clock(a.name),CInt(t)))
     }
 
-    if (formula.actions.isEmpty || act2port.map(_._1).toSet.intersect(formula.actions).nonEmpty)
+    if (act2port.map(_._1).toSet.intersect(formula.actions) == formula.actions )
       tf2UF(formula).map(Simplify(_))
     else throw new FormulaException("Unkown action names in formula "+ Show(formula))
   }

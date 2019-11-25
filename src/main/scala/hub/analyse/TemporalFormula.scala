@@ -51,6 +51,16 @@ sealed trait TemporalFormula {
 //    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
   }
 
+  def hasDone:Boolean = this match {
+    case AA(f) => f.hasDone
+    case AE(f) => f.hasDone
+    case EA(f) => f.hasDone
+    case EE(f) => f.hasDone
+    case Eventually(f1,f2) => f1.hasDone || f2.hasDone
+    case _ => false
+    //    case Until(f1,f2) => f1.hasBefore || f2.hasBefore
+  }
+
   def actions:Set[String] = this match {
     case AA(f) => f.actions
     case AE(f) => f.actions
@@ -112,6 +122,16 @@ sealed trait StFormula {
     case Or(f1,f2)      => f1.hasWaits || f2.hasWaits
     case Imply(f1,f2)   => f1.hasWaits || f2.hasWaits
     case Not(f1)        => f1.hasWaits
+    case _              => false
+  }
+
+  def hasDone:Boolean = this match {
+    case DoneAction(a)  => true
+    case Before(f1,f2)  => f1.hasDone || f2.hasDone
+    case And(f1,f2)     => f1.hasDone || f2.hasDone
+    case Or(f1,f2)      => f1.hasDone || f2.hasDone
+    case Imply(f1,f2)   => f1.hasDone || f2.hasDone
+    case Not(f1)        => f1.hasDone
     case _              => false
   }
 

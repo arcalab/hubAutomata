@@ -363,8 +363,9 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
     }
 
     val nInitVal = initVal -- unusedVars
+    val ninv = inv.map(i=> i._1->Simplify(i._2))
 
-    HubAutomata(ports,sts,init,ntrans,clocks,inv, nInitVal,taskPort)
+    HubAutomata(ports,sts,init,ntrans,clocks,ninv, nInitVal,taskPort)
   }
 
 
