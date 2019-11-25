@@ -73,7 +73,10 @@ object Simplify {
     case CTrue | ET(_,_) | LT(_,_) | GT(_,_) | LE(_,_) | GE(_,_) => cc
     case CAnd(CTrue, cc2) => apply(cc2)
     case CAnd(cc1, CTrue) => apply(cc1)
-    case CAnd(cc1, cc2) => CAnd(apply(cc1),apply(cc2))
+    case CAnd(cc1, cc2) => (apply(cc1),apply(cc2)) match {
+      case (cc3,cc4) => if (cc3 == cc4) cc3 else CAnd(cc3,cc4)
+
+    }
   }
 
   def apply(f:TemporalFormula):TemporalFormula = f match {

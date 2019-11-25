@@ -359,7 +359,7 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
       //cleanUpd = if (cleanUpd.vars.intersect(intermediateVars).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars)
       cleanUpd = if (cleanUpd.vars.intersect(intermediateVars.intersect(intermediateOfT)).isEmpty) cleanUpd else rmIntermediateUpd(cleanUpd,intermediateVars.intersect(intermediateOfT))
 //      println("New Update: \n"+cleanUpd)
-      ntrans += ((from,(to,p,g,cc,cr,Simplify(cleanUpd),es)))
+      ntrans += ((from,(to,p,Simplify(g),Simplify(cc),cr,Simplify(cleanUpd),es)))
     }
 
     val nInitVal = initVal -- unusedVars
@@ -548,6 +548,15 @@ object HubAutomata {
       case Prim(CPrim("event",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b),Set(seed,seed-1), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue,Set(), Noop, Set(e)),
                                               seed -> (seed - 1, Set(b), Ltrue, CTrue, Set(),Noop, Set(e))),Set(),Map(),Map()), seed + 2)
+      case Prim(CPrim("pevent",_,_,extra), List(a), List(b), _) =>
+        val extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        val period:Option[Int] = extraInfo.find(e => e.startsWith("period:")) match {
+          case Some(s) => Some(s.drop(7).toInt)
+          case _ => None}
+        val inv:Map[Int,CCons] = if (period.isDefined) Map((seed)->LE("p",CInt(period.get))) else  Map()
+        val clocks:Set[String] = if (period.isDefined) Set("p") else Set()
+        (HubAutomata(Set(a, b),Set(seed,seed-1), seed - 1, Set(seed - 1 -> (seed, Set(a), Ltrue, CTrue,Set(), Noop, Set(e)),
+          seed -> (seed - 1, Set(b), Ltrue, CTrue, Set(),Noop, Set(e))),clocks,inv,Map()), seed + 2)
       //For now it doesn't have input Clear. //TODO: add Clear input if desirable
       case Prim(CPrim("dataEvent",_,_,_), List(a), List(b), _) =>
         (HubAutomata(Set(a, b), Set(seed,seed-1),seed - 1
@@ -632,19 +641,42 @@ object HubAutomata {
           , Set(),Map(),Map(Var("c")->Val(0)))
           , seed + 1)
           case Prim(CPrim("writer", _, _, extra), List(), List(a),_) =>
-            val extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
-            extraInfo.find(e => e.startsWith("writes:")) match {
-              case Some(s) => (HubAutomata(Set(a),
-                Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Val(s.drop(7).toInt), Set(e))),
-                Set(),Map(),Map(),if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 1)
-              case _ => (HubAutomata(Set(a),
-                Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := Cons("*"), Set(e))),
-                Set(),Map(),Map(),if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 1)}
+            val extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            val expr:Expr = extraInfo.find(e => e.startsWith("writes:")) match {
+              case Some(s) => Val(s.drop(7).toInt)
+              case None => Cons("*")
+            }
+            extraInfo.find(e => e.startsWith("period:")) match {
+              case Some(p) =>
+                val period:Int = p.drop(7).toInt
+                (HubAutomata(Set(a),
+                  Set(seed,seed-1), seed-1,
+                  Set(seed-1 -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := expr, Set(e))
+                    , seed -> (seed-1, Set(),Ltrue, ET("p",CInt(period)),Set("p"),Noop, Set(e)))
+                  , Set("p"),Map((seed)->LE("p",CInt(period)),(seed-1)->LE("p",CInt(period))),Map(),
+                  if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 2)
+              case None =>
+                (HubAutomata(Set(a),
+                  Set(seed), seed, Set(seed -> (seed, Set(a),Ltrue, CTrue,Set(),a.toString := expr, Set(e))),
+                  Set(),Map(),Map(),if(extra.contains("T")) (Set(),Set(a)) else (Set(),Set())), seed + 1)
+            }
           case Prim(CPrim("reader", _, _, extra), List(a), List(),_) =>
-            (HubAutomata(Set(a),
-              Set(seed),seed,
-              Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),
-              Set(),Map(),Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set())), seed + 1)
+            val extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            extraInfo.find(e => e.startsWith("period:")) match {
+              case Some(p) =>
+                val period:Int = p.drop(7).toInt
+                (HubAutomata(Set(a),
+                  Set(seed,seed-1),seed-1,
+                  Set(seed-1 -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))
+                  , seed -> (seed-1, Set(), Ltrue, ET("p",CInt(period)),Set("p"),Noop, Set(e))),
+                  Set("p"),Map((seed)->LE("p",CInt(period)),(seed-1)->LE("p",CInt(period)))
+                  ,Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set())), seed + 2)
+              case _ => None
+                (HubAutomata(Set(a),
+                  Set(seed),seed,
+                  Set(seed -> (seed, Set(a), Ltrue, CTrue,Set(),"_bf":= a.toString, Set(e))),
+                  Set(),Map(),Map(),if(extra.contains("T")) (Set(a),Set()) else (Set(),Set())), seed + 1)
+            }
           case Prim(CPrim("nbreader", _, _, extra), List(a), List(),_) =>
             var extraInfo:List[String] = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
@@ -678,7 +710,7 @@ object HubAutomata {
               , clocks,inv,Map(),(Set(),Set(b)))
               , seed + 2)
           case Prim(CPrim("await", _, _, extra), List(a,b), List(),_) =>
-            var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+            var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
             var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
               case Some(s) => s.drop(3).toInt
               case _ => 0}
@@ -736,7 +768,7 @@ object HubAutomata {
           , seed + 1)
 
       case Prim(CPrim("timer", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -748,7 +780,7 @@ object HubAutomata {
           , seed + 2)
 
       case Prim(CPrim("psync", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var period:Int =  extraInfo.find(e => e.startsWith("period:")) match {
           case Some(s) => s.drop(7).toInt
           case _ => 0}
@@ -757,7 +789,7 @@ object HubAutomata {
           , Set("p"),Map((seed)->LE("p",CInt(period))),Map())
           , seed + 1)
       case Prim(CPrim("timeout", _, _, extra), List(a), List(b),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -768,7 +800,7 @@ object HubAutomata {
           , Set("cl"),Map(seed->LE("cl",CInt(to))),Map())
           , seed + 2)
       case Prim(CPrim("putNB", _, _, extra), List(a), List(err,ok),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -779,7 +811,7 @@ object HubAutomata {
           , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(ok)))
           , seed + 2)
       case Prim(CPrim("getNB", _, _, extra), List(in,go), List(c),_) =>
-        var extraInfo = extra.iterator.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
         var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
           case Some(s) => s.drop(3).toInt
           case _ => 0}
@@ -793,6 +825,92 @@ object HubAutomata {
             seed -> (seed - 1, Set(c), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
           , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(in),Set()))
           , seed + 2)
+      case Prim(CPrim("nbget", _, _, extra), List(in,go), List(next),_) =>
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        val period:Option[Int] = extraInfo.find(e => e.startsWith("period:")) match {
+          case Some(s) => Some(s.drop(7).toInt)
+          case _ => None
+        }
+        val clocks:Set[String] = if (period.isDefined) Set("cl","p") else Set("cl")
+        val inv:Map[Int,CCons] = if(period.isDefined) Map(seed->CAnd(LE("cl",CInt(to)),LE("p",CInt(period.get)))) else  Map(seed->LE("cl",CInt(to)))
+        (HubAutomata(Set(in,go,next), Set(seed,seed-1),seed - 1,
+          Set(seed - 1 -> (seed, Set(go), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
+            seed -> (seed - 1, Set(in,next), Ltrue,CTrue,Set(), "_bf":= in.toString, Set(e)),
+            seed -> (seed - 1, Set(next), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+          , clocks,inv,Map(),(Set(in),Set()))
+          , seed + 2)
+      case Prim(CPrim("nbget", _, _, extra), List(in), List(),_) =>
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        extraInfo.find(e => e.startsWith("period:")) match {
+          case Some(s) =>
+            val period:Int = s.drop(7).toInt
+            (HubAutomata(Set(in), Set(seed,seed-1),seed - 1,
+              Set(seed - 1 -> (seed, Set(in), Ltrue, CTrue, Set(), "_bf":= in.toString, Set(e)),
+                seed-1 -> (seed, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("p",CInt(period)),Set("p","cl"), Noop, Set(e)))
+              , Set("cl"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
+                ,Map(),(Set(in),Set()))
+              , seed + 2)
+          case None =>
+            (HubAutomata(Set(in), Set(seed),seed,
+              Set(seed -> (seed, Set(in), Ltrue, CTrue, Set("cl"), "_bf":= in.toString, Set(e)),
+                seed -> (seed , Set(), Ltrue, ET("cl",CInt(to)),Set("cl"), Noop, Set(e)))
+              , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(in),Set()))
+              , seed + 1)
+        }
+      case Prim(CPrim("nbput", _, _, extra), List(go), List(err,out),_) =>
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        val expr:Expr = extraInfo.find(e => e.startsWith("writes:")) match {
+          case Some(s) => Val(s.drop(7).toInt)
+          case None => Cons("*")
+        }
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        val period:Option[Int] = extraInfo.find(e => e.startsWith("period:")) match {
+          case Some(s) => Some(s.drop(7).toInt)
+          case _ => None
+        }
+        val clocks:Set[String] = if (period.isDefined) Set("cl","p") else Set("cl")
+        val inv:Map[Int,CCons] = if(period.isDefined) Map(seed->CAnd(LE("cl",CInt(to)),LE("p",CInt(period.get)))) else  Map(seed->LE("cl",CInt(to)))
+        (HubAutomata(Set(go,err,out), Set(seed,seed-1),seed - 1,
+          Set(seed - 1 -> (seed, Set(go), Ltrue, CTrue, Set("cl"), Noop, Set(e)),
+            seed -> (seed - 1, Set(out), Ltrue, CTrue,Set(), out.toString := expr, Set(e)),
+            seed -> (seed - 1, Set(err), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)))
+          , clocks,inv,Map(),(Set(),Set(out)))
+          , seed + 2)
+      case Prim(CPrim("nbput", _, _, extra), List(), List(out),_) =>
+        var extraInfo = extra.toList.filter(e => e.isInstanceOf[String]).map(e => e.asInstanceOf[String])
+        val expr:Expr = extraInfo.find(e => e.startsWith("writes:")) match {
+          case Some(s) => Val(s.drop(7).toInt)
+          case None => Cons("*")
+        }
+        var to:Int =  extraInfo.find(e => e.startsWith("to:")) match {
+          case Some(s) => s.drop(3).toInt
+          case _ => 0}
+        extraInfo.find(e => e.startsWith("period:")) match {
+          case Some(s) =>
+            val period:Int = s.drop(7).toInt
+            (HubAutomata(Set(out), Set(seed,seed-1),seed - 1,
+              Set(seed - 1 -> (seed, Set(out), Ltrue, CTrue, Set(), out.toString:= expr, Set(e)),
+                seed-1 -> (seed, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)),
+                seed -> (seed - 1, Set(), Ltrue, ET("p",CInt(period)),Set("p","cl"), Noop, Set(e)))
+              , Set("cl"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
+              ,Map(),(Set(out),Set()))
+              , seed + 2)
+          case None =>
+            (HubAutomata(Set(out), Set(seed),seed,
+              Set(seed -> (seed, Set(out), Ltrue, CTrue, Set("cl"), out.toString := expr, Set(e)),
+                seed -> (seed , Set(), Ltrue, ET("cl",CInt(to)),Set("cl"), Noop, Set(e)))
+              , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(out)))
+              , seed + 1)
+        }
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
         (HubAutomata(Set(a, b), Set(seed),seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(), Map()), seed + 1)
@@ -813,7 +931,7 @@ object HubAutomata {
       * @param a2   automata to be composed
       * @return composed automata
       */
-    def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 20000)
+    def join(a1: HubAutomata, a2: HubAutomata): HubAutomata = join(a1, a2, true, 40000)
 
     /**
       * Automata composition - combining every possible transition,
@@ -835,7 +953,7 @@ object HubAutomata {
       var restrans:Trans = Set()
       var newStates = Map[(Int, Int), Int]()
       // if they share clocks, rename them to avoid conflicts
-      var sharedClocks = a1.clocks intersect a2.clocks
+      var sharedClocks = (a1.clocks intersect a2.clocks) -- Set("p") // remove clock that has to be with periodicity (needed because of W with periodicity)
       var newClocks: Map[(String,Int),String] = Map()
       var clockSeed = 0
       // println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")
