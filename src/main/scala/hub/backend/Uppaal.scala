@@ -145,7 +145,7 @@ object Uppaal {
       // check if a fired action belongs to a task action and add a dummy broadcast to force priority
       val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,to,names.map(a=>chan(a))++brcast,cc,cr,g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,names.map(a=>chan(a))++brcast,cc,cr++names.map(a => clock(a)),g,tacts & facts)//u)
       // second part of the edge, from the new committed state
 //      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
@@ -644,7 +644,7 @@ object Uppaal {
         var part1:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
           part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))),UNot(UCGuard(LT(clock(a.name),CInt(t))))))
+          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))),UCGuard(GE(clock(a.name),CInt(t)))))
         } else throw new FormulaException("Action name not found: " + b)
         List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
