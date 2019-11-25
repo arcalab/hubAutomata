@@ -132,6 +132,7 @@ sealed trait StFormula {
     case Or(f1,f2)      => f1.hasDone || f2.hasDone
     case Imply(f1,f2)   => f1.hasDone || f2.hasDone
     case Not(f1)        => f1.hasDone
+    case Waits(_,_,_)   => true
     case _              => false
   }
 
