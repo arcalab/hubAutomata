@@ -854,7 +854,7 @@ object HubAutomata {
               Set(seed - 1 -> (seed, Set(in), Ltrue, CTrue, Set(), "_bf":= in.toString, Set(e)),
                 seed-1 -> (seed, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)),
                 seed -> (seed - 1, Set(), Ltrue, ET("p",CInt(period)),Set("p","cl"), Noop, Set(e)))
-              , Set("cl"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
+              , Set("cl","p"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
                 ,Map(),(Set(in),Set()))
               , seed + 2)
           case None =>
@@ -901,7 +901,7 @@ object HubAutomata {
               Set(seed - 1 -> (seed, Set(out), Ltrue, CTrue, Set(), out.toString:= expr, Set(e)),
                 seed-1 -> (seed, Set(), Ltrue, ET("cl",CInt(to)),Set(), Noop, Set(e)),
                 seed -> (seed - 1, Set(), Ltrue, ET("p",CInt(period)),Set("p","cl"), Noop, Set(e)))
-              , Set("cl"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
+              , Set("cl","p"),Map((seed-1)->CAnd(LE("cl",CInt(to)),LE("p",CInt(period))), (seed)-> (LE("p",CInt(period))))
               ,Map(),(Set(out),Set()))
               , seed + 2)
           case None =>
@@ -953,7 +953,7 @@ object HubAutomata {
       var restrans:Trans = Set()
       var newStates = Map[(Int, Int), Int]()
       // if they share clocks, rename them to avoid conflicts
-      var sharedClocks = (a1.clocks intersect a2.clocks) -- Set("p") // remove clock that has to be with periodicity (needed because of W with periodicity)
+      var sharedClocks = (a1.clocks intersect a2.clocks)
       var newClocks: Map[(String,Int),String] = Map()
       var clockSeed = 0
       // println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}\nover ${shared}")

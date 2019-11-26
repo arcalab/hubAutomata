@@ -210,7 +210,7 @@ object Uppaal {
     if (validFormula(tf,hub))
       tf match {
     //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-      case f if f.waitModes.intersect(Set(AtLeast,MoreThan)).nonEmpty || f.hasDone => Set(mkWithCommitted(Simplify(hub)))
+      case f if f.hasWaits || f.hasDone => Set(mkWithCommitted(Simplify(hub)))
       case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
       case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
       case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
