@@ -134,7 +134,7 @@ object Uppaal {
     var maxloc = hub.sts.max
     var initVal:Set[(Var,Expr)] = Set()
 
-    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
+    for ((from,to,prio,acts,cc,cr,g,u)  <- hub.getTransitions) {
       var names = acts.map(hub.getPortName)
       // set all true to all variables named as the actions (to keep track of when an action fire)
       var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
@@ -170,7 +170,7 @@ object Uppaal {
     var maxloc = hub.sts.max
     var initVal:Set[(Var,Expr)] = Set()
 
-    for ((from,to,acts,cc,cr,g,u)  <- hub.getTransitions) {
+    for ((from,to,prio,acts,cc,cr,g,u)  <- hub.getTransitions) {
       var names = acts.map(hub.getPortName)
       // set all true to all variables named as the actions (to keep track of when an action fire)
       var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
@@ -305,7 +305,7 @@ object Uppaal {
       var maxloc = hub.sts.max
       var initVal:Set[(Var,Expr)] = Set()
 
-      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+      for ((from,to,prio,acts,cc,cr,g,u)  <-hubedges) {
         var names:Set[String] = acts.map(hub.getPortName)
         // set true to all variables named as the actions (to keep track of when an action fire)
         var tacts = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
@@ -385,7 +385,7 @@ object Uppaal {
 
       val (facts,fccons) = collectFirstOf(f2)
 
-      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+      for ((from,to,prio,acts,cc,cr,g,u)  <-hubedges) {
         var names = acts.map(hub.getPortName)
         // set all true to all variables named as the actions (to keep track of when an action fire)
         var trueActs = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)
@@ -431,7 +431,7 @@ object Uppaal {
 
 //      val (facts,fccons) = collectFirstOf(f3)
 
-      for ((from,to,acts,cc,cr,g,u)  <-hubedges) {
+      for ((from,to,prio,acts,cc,cr,g,u)  <-hubedges) {
         var names = acts.map(hub.getPortName)
         // set all true to all variables named as the actions (to keep track of when an action fire)
         var trueActs = names.map(a => Asg(Var(port(a)),Val(1))).foldRight[Update](Noop)(_&_)

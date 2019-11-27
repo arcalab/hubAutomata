@@ -36,8 +36,8 @@ object Simplify {
   def apply(hub: HubAutomata): HubAutomata = hub match {
     case HubAutomata(ports, sts, init, trans, clocks, inv, initVal,taskPorts) =>
       val nInv = inv.map(i => i._1 -> Simplify(i._2))
-      val nTrans = for ((from, (to, fire, g, cc, cr, upd, es)) <- trans) yield
-        (from, (to, fire, Simplify(g), Simplify(cc), cr, Simplify(upd), es))
+      val nTrans = for ((from, (to,  prio,fire, g, cc, cr, upd, es)) <- trans) yield
+        (from, (to, prio, fire, Simplify(g), Simplify(cc), cr, Simplify(upd), es))
       HubAutomata(ports, sts, init, nTrans, clocks, nInv, initVal,taskPorts)
   }
 
