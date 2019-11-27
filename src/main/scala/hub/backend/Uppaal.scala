@@ -72,8 +72,11 @@ object Uppaal {
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("P"))
     portvars = portvars -- initVars.map(i=>i._1)
     val channels:Set[String] = uppaals.flatMap(u=> u.edges).flatMap(e=>e.ports).filter(p=> p.endsWith("!") || p.endsWith("?"))
-    val simpleCh:Set[String] = channels.filterNot(_.startsWith("broadcast"))
-    val broadCh:Set[String] = channels.filter(_.startsWith("broadcast"))
+    val simpleCh:Set[String] = channels.filterNot(_.startsWith("priority"))
+    var priorityCh:List[String] = channels.filter(_.startsWith("priority")).map(_.dropRight(1)).toList
+    println(priorityCh)
+    priorityCh = priorityCh.sortBy(p=> p.drop(8).toInt).reverse
+    println(priorityCh)
     s"""<?xml version="1.0" encoding="utf-8"?>
        |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
        |<nta>
@@ -86,11 +89,11 @@ object Uppaal {
        |
        |${if (initVars.nonEmpty) initVars.map(i => "bool " + Show(Asg(i._1,i._2))).mkString("",";\n",";\n") else ""}
        |// Channels (actions)
-       |${if (simpleCh.nonEmpty) channels.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
+       |${if (simpleCh.nonEmpty) simpleCh.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
        |// Broadcast Channels (actions)
-       |${if (broadCh.nonEmpty) channels.map(_.dropRight(1)).mkString("broadcast chan ", ",", ";") else ""}
+       |${if (priorityCh.nonEmpty) priorityCh.mkString("broadcast chan ", ",", ";") else ""}
        |// Channels priority
-       |${if (broadCh.nonEmpty) s"chan priority default &lt; ${broadCh.map(_.dropRight(1)).mkString("",",",";")}" else ""}
+       |${if (priorityCh.size>1) s"chan priority ${priorityCh.mkString(""," &lt; "," ;")}" else ""}
        |</declaration>
        |${uppaals.map(mkTemplate).mkString("\n")}
        |<system>
@@ -105,7 +108,6 @@ object Uppaal {
        |</nta>""".stripMargin
 
   }
-
 
   /**
     * Translates a hub automata into a Uppaal timed automata and returns xml model
@@ -134,6 +136,7 @@ object Uppaal {
     var maxloc = hub.sts.max
     var initVal:Set[(Var,Expr)] = Set()
 
+
     for ((from,to,prio,acts,cc,cr,g,u)  <- hub.getTransitions) {
       var names = acts.map(hub.getPortName)
       // set all true to all variables named as the actions (to keep track of when an action fire)
@@ -142,10 +145,11 @@ object Uppaal {
       var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
       // set to true all variables that capture first_a for a an action in acts
       //var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
-      // check if a fired action belongs to a task action and add a dummy broadcast to force priority
-      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
+//      // check if a fired action belongs to a task action and add a dummy broadcast to force priority
+//      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
+      // add a dummy broadcast chan based on the priority of the edge
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,to,names.map(a=>chan(a))++brcast,cc,cr++names.map(a => clock(a)),g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,names.map(a=>chan(a))+priority(prio),cc,cr++names.map(a => clock(a)),g,tacts & facts)//u)
       // second part of the edge, from the new committed state
 //      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
@@ -178,10 +182,9 @@ object Uppaal {
       var facts = if (acts.isEmpty) Noop else (hub.ports.map(hub.getPortName) -- names).map(a => Asg(Var(port(a)),Val(0))).foldRight[Update](Noop)(_&_)
       // set to true all variables that capture first_a for a an action in acts
       var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
-      // check if a fired action belongs to a task action and add a dummy broadcast to force priority
-      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
+      // add a dummy broadcast chan based on the priority of the edge
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))++brcast,cc,cr,g, tacts & facts)//u)
+      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g, tacts & facts)//u)
       // second part of the edge, from the new committed state
       newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
@@ -327,10 +330,9 @@ object Uppaal {
         }
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
-        // check if a fired action belongs to a task action and add a dummy broadcast to force priority
-        val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
+        // add a dummy broadcast chan based on the priority of the edge
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))++brcast,cc,cr,g,tacts & facts & executions1)//u)
+        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g,tacts & facts & executions1)//u)
 //        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
         newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds & executions & executions2)
@@ -366,6 +368,8 @@ object Uppaal {
   private def broadcast():String = "broadcastSync!"
 
   private def clock(a:String):String = "t"+a
+
+  private def priority(i:Int):String = "priority"+Math.abs(i)+"!"
 
   //  private def mkSinceName(a:Int,b:Int):String =
   //    "int"+portToString(a)+"_"+portToString(b)
