@@ -139,12 +139,15 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
       // if it is an interface then there is only one, but if it is a port from a task it can appear in two prims
       var e = t.get._2._7.filter(e => (e.outs ++ e.ins).contains(p))
       var extraInfo:Set[String] = e.flatMap(p=> p.prim.extra.filter(e => e.isInstanceOf[String])).map(e => e.asInstanceOf[String])
-      var portName:String = extraInfo.find(e => e.endsWith("!") || e.endsWith("?")) match {
-        case Some(s) => s
+      //var portName:String = extraInfo.find(e => e.endsWith("!") || e.endsWith("?")) match {
+      var portName:String = extraInfo.find(e => e.startsWith("port:"+p+":")) match {
+        case Some(s) => s.drop(("port:"+p+":").size)
         case _ => ""
       }
-      if (portName!="")
-        name = portName.split(" ").tail.head.dropRight(1)
+      if (portName!="") {
+        val maybeName = portName.split(" ").tail.head.dropRight(1)
+        name = if (maybeName.nonEmpty) maybeName else getPortIndexedName(p)
+      }
       else {
         //if (HubAutomata.PRIMITIVE.contains(e.get.prim.name)) // if it is primitive, return general name inX or outX
         if ((DSL.primitiveConnectors ++ DSL.hubs).contains(e.head.prim.name))
@@ -911,7 +914,7 @@ object HubAutomata {
               , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(out)))
               , seed + 1)
         }
-      case Prim(CPrim("task", _, _, extra),ins,outs,_) =>
+      case Prim(CPrim("task",i, j, extra),ins,outs,parents) =>
         val tports:Option[List[TaskPort]] = extra.toList.find(p=> p.isInstanceOf[List[TaskPort]]).map(e=>e.asInstanceOf[List[TaskPort]])
         if (tports.isDefined) {
           var nins = ins.toIterator
@@ -919,9 +922,11 @@ object HubAutomata {
           val periodic = extra.toList.filter(_.isInstanceOf[String]).map(_.asInstanceOf[String]).find(_.startsWith("periodicity:"))
           val period:Option[Int] = if (periodic.isDefined) Some(periodic.get.drop(12).toInt) else None
           val pairs = tports.get.map(p=> if (p.isInput) (nins.next(),p) else (nouts.next(),p))
-          val (aut,nseed) = mkTask(pairs,e,period,seed)
+          val newExtra = extra ++ pairs.map(p => "port:"+p._1+":"+p._2).toSet
+          println(newExtra)
+          val (aut,nseed) = mkTask(pairs,Prim(CPrim("task",i, j, newExtra),ins,outs,parents) ,period,seed)
 //          println("Ports:"+ tports.mkString(","))
-          println("Automata:"+aut)
+//          println("Automata:"+aut)
           (aut,nseed)
         } else throw new GenerationException(s"Primitive task without ports not supported.")
       // unknown name with type 1->1 -- behave as identity
@@ -1148,14 +1153,15 @@ object HubAutomata {
     }
 
     private def mkTask(tports:List[(Int,TaskPort)],e:Prim,periodic:Option[Int],seed:Int): (HubAutomata,Int) = {
+
       val init = seed
       var lastLoc = seed
-      var lastEdges:Trans = Set()
 
       var locs:Set[Int] = Set(seed)
       var edges:Trans = Set()
       var inv:Map[Int,CCons] = Map()
 
+      // clock seed
       var c = 0
 
       var inPorts:Set[Int] = Set()
