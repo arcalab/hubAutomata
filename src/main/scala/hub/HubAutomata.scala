@@ -4,9 +4,10 @@ import hub.HubAutomata.{Trans, Valuation}
 import hub.DSL._
 import hub.backend.{Show, Simplify}
 import hub.common.GenerationException
-import preo.ast.CPrim
-import preo.backend.Network.{Prim}
+import preo.ast.{CPrim, IVal}
+import preo.backend.Network.Prim
 import preo.backend.{Automata, AutomataBuilder}
+import preo.frontend._
 
 import scala.collection.mutable
 
@@ -134,7 +135,6 @@ case class HubAutomata(ports:Set[Int],sts:Set[Int],init:Int,trans:Trans,
     var name = ""
     var t = trans.find(t => t._2._2.contains(p)) //get a transition with p
     if (t.nonEmpty) {
-      // NOT true: get the reo edge to which p belongs (there is only one because it is an in or out)
       // find all reo edges to which p belongs,
       // if it is an interface then there is only one, but if it is a port from a task it can appear in two prims
       var e = t.get._2._7.filter(e => (e.outs ++ e.ins).contains(p))
@@ -911,11 +911,22 @@ object HubAutomata {
               , Set("cl"),Map(seed->LE("cl",CInt(to))),Map(),(Set(),Set(out)))
               , seed + 1)
         }
+      case Prim(CPrim("task", _, _, extra),ins,outs,_) =>
+        val tports:Option[List[TaskPort]] = extra.toList.find(p=> p.isInstanceOf[List[TaskPort]]).map(e=>e.asInstanceOf[List[TaskPort]])
+        if (tports.isDefined) {
+          var nins = ins.toIterator
+          var nouts = outs.toIterator
+          val periodic = extra.toList.filter(_.isInstanceOf[String]).map(_.asInstanceOf[String]).find(_.startsWith("periodicity:"))
+          val period:Option[Int] = if (periodic.isDefined) Some(periodic.get.drop(12).toInt) else None
+          val pairs = tports.get.map(p=> if (p.isInput) (nins.next(),p) else (nouts.next(),p))
+          val (aut,nseed) = mkTask(pairs,e,period,seed)
+//          println("Ports:"+ tports.mkString(","))
+          println("Automata:"+aut)
+          (aut,nseed)
+        } else throw new GenerationException(s"Primitive task without ports not supported.")
       // unknown name with type 1->1 -- behave as identity
       case Prim(name, List(a), List(b), _) =>
         (HubAutomata(Set(a, b), Set(seed),seed, Set(seed -> (seed, Set(a, b), Ltrue, CTrue,Set(), b.toString := a.toString, Set(e))),Set(),Map(), Map()), seed + 1)
-
-
       case Prim(p, _, _, _) =>
         throw new GenerationException(s"Primitive connector ${p.name} not modelled as Hub Automata.")
 
@@ -943,8 +954,8 @@ object HubAutomata {
       * @return composed automata
       */
     def join(a1: HubAutomata, a2: HubAutomata, hide: Boolean, timeout: Int): HubAutomata = {
-      //println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}")
-      //println(s"combining ${a1.show}\nwith ${a2.show}")
+//      println(s"combining ${a1.smallShow}\nwith ${a2.smallShow}")
+//      println(s"combining ${a1}\nwith ${a2  }")
 
       var seed = 0
       var steps = timeout
@@ -1132,9 +1143,109 @@ object HubAutomata {
 
       //    println(s"got ${a.show}")
       val res2 = res1.cleanup
-//      println("return clocks: "+ res2.clocks)
+//      println("return: "+ res2)
       res2
     }
+
+    private def mkTask(tports:List[(Int,TaskPort)],e:Prim,periodic:Option[Int],seed:Int): (HubAutomata,Int) = {
+      val init = seed
+      var lastLoc = seed
+      var lastEdges:Trans = Set()
+
+      var locs:Set[Int] = Set(seed)
+      var edges:Trans = Set()
+      var inv:Map[Int,CCons] = Map()
+
+      var c = 0
+
+      var inPorts:Set[Int] = Set()
+      var outPorts:Set[Int] = Set()
+
+      def hasNext(i:Int):Boolean = i < (tports.length-1)
+      def clock(i:Int):String = "c"+i
+
+      // mk a NW/TO !/?
+      def mkNB(port:Int,timeout:Int,i:Int,input:Boolean,v:Option[IVal]=None):Unit = {
+        // next location:
+        // if no more ports or periodicity: new location, otherwise init
+        var to = if (hasNext(i) || periodic.isDefined) lastLoc+1 else init
+        // clocks to reset:
+        var resets:Set[String] =
+          if (hasNext(i)) { // if there is next port
+            // if next is NW/T reset that clock, otherwise nothing
+            if (!tports(i+1)._2.isWait) Set(clock(c+1)) else Set()
+          } else if (i==0 && periodic.isEmpty) { // no more ports and the only port and no periodicity, reset this clock
+            Set(clock(c))
+          } else if (!tports(0)._2.isWait && periodic.isEmpty) { // no more ports and first is NW/TO, reset that clock
+            Set(clock(0))
+          } else Set()
+        // if input: bf:= in, if output: out:= * or v
+        var upd =  if (input) "_bf" := port.toString else port.toString:= (if (v.isDefined) Val(v.get.n) else Cons("*"))
+        // transition that timesout
+        edges+= lastLoc -> (to, Set(), Ltrue, ET(clock(c),CInt(timeout)), resets, Noop, Set(e))
+        // transition that synchronizes
+        edges+= lastLoc -> (to, Set(port), Ltrue, CTrue, resets, upd, Set(e))
+        // invariant of this NW/TO
+        inv+= lastLoc -> (if (periodic.isDefined) CAnd(LE(clock(c),CInt(timeout)),LE("p",CInt(periodic.get))) else LE(clock(c),CInt(timeout)))
+        // new last location
+        lastLoc = to
+        // upd current locs
+        locs+= to
+        // upd clock seed
+        c +=1
+        // upd input/output ports
+        if (input) inPorts+=port else outPorts+= port
+      }
+
+      def mkW(port:Int,i:Int,input:Boolean,v:Option[IVal]=None):Unit = {
+        // next location:
+        // if no more ports or periodicity: new location, otherwise init
+        var to = if (hasNext(i) || periodic.isDefined) lastLoc+1 else init
+        // clocks to reset:
+        var resets:Set[String] =
+        if (hasNext(i)) { // if there is next port
+          // if next is NW/T reset that clock, otherwise nothing
+          if (!tports(i+1)._2.isWait) Set(clock(c)) else Set()
+        } else if (!tports(0)._2.isWait && periodic.isEmpty) { // no more ports and no periodic and first is NW/TO, reset that clock
+          Set(clock(0))
+        } else Set()
+        // if input: bf:= in, if output: out:= * or v
+        var upd =  if (input) "_bf" := port.toString else port.toString:= (if (v.isDefined) Val(v.get.n) else Cons("*"))
+        // edge that synchronizes
+        edges+= lastLoc -> (to, Set(port), Ltrue, CTrue, resets, upd, Set(e))
+        //upd invariant if needed
+        if (periodic.isDefined) inv+= lastLoc -> LE("p",CInt(periodic.get))
+        // upd last loc
+        lastLoc = to
+        // upd locs
+        locs+= to
+        // upd in/output ports
+        if (input) inPorts+=port else outPorts+= port
+      }
+
+      for (((pi,p),i) <- tports.zipWithIndex) {
+        p match {
+          case PutNW(name, value) => mkNB(pi,0,i,false,value)
+          case PutTO(name, value, timeout) => mkNB(pi,timeout,i,false,value)
+          case PutW(name,value) => mkW(pi,i,false,value)
+          case GetNW(name) => mkNB(pi,0,i,true)
+          case GetTO(name, timeout) => mkNB(pi,timeout,i,true)
+          case GetW(name) => mkW(pi,i,true)
+        }
+      }
+      if (periodic.isDefined) {
+        var reset:Set[String] = Set("p")
+        if (!tports(0)._2.isWait) reset+= clock(0)
+        inv+= lastLoc -> LE("p",CInt(periodic.get))
+        edges+= lastLoc -> (init, Set(), Ltrue, ET("p",CInt(periodic.get)), reset,Noop, Set(e))
+      }
+      val ports = tports.map(_._1).toSet
+      val clocks:Set[String] = (0 to c-1).map(i => clock(i)).toSet
+      (HubAutomata(ports,locs,init,edges,clocks,inv,Map(),(inPorts,outPorts)),lastLoc)
+    }
+
+
+
   }
 
 }
