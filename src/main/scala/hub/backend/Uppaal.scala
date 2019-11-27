@@ -644,11 +644,17 @@ object Uppaal {
       case EveryAfter(a,b,t) =>
         val locsOfB: Set[UppaalStFormula] = act2locs.getOrElse(b.name, Set()).map(l => Location("Hub.L" + portToString(l)))
         var part1:UppaalStFormula = UTrue
+        var part2:UppaalStFormula = UTrue
         if (locsOfB.nonEmpty) {
-          part1 = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
-          part1 = UImply(part1,UAnd(UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))),UCGuard(GE(clock(a.name),CInt(t)))))
+          val locs = locsOfB.foldRight[UppaalStFormula](UNot(UTrue))(_ || _)
+          //part1 = UImply(locs,UAnd(UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))),UCGuard(GE(clock(a.name),CInt(t)))))
+          part1 = UImply(locs
+                        ,UDGuard(Pred("<=",List(Var(since(a.name,b.name)),Val(1)))))
+          part2 = UImply(UAnd(locs,UDGuard(Pred("==",List(Var(since(a.name,b.name)),Val(1)))))
+                        ,UCGuard(GE(clock(a.name),CInt(t))))  
         } else throw new FormulaException("Action name not found: " + b)
-        List(UAA(part1),UEventually(stf2UStF(a),stf2UStF(b))) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
+        val part3 = UEventually(stf2UStF(a),stf2UStF(b))
+        List(UAA(part1),UAA(part2),part3) //UEventually(stf2UStF(DoingAction(a.name)),stf2UStF(DoingAction(b.name))))
       case Eventually(Action(a), Before(f1,f2)) => List(UEventually(stf2UStF(Action(a)),stf2UStF(Before(f1,f2))))
       case Eventually(Action(a), Until(f1,Action(b))) => List(UEventually(stf2UStF(Action(a)),UAnd(UNot(mkFirstOf(Action(b))),stf2UStF(f1))))
       case Eventually(f1, f2) if f1.hasUntil || f2.hasUntil => throw new FormulaException("Until clauses inside eventually clause can have the form a --> f until b")
