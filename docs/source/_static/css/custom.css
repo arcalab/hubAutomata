@@ -1,0 +1,5 @@
+/* Custom content width */
+
+.wy-nav-content {
+    max-width:1000px; /*none or 1400*/
+}
