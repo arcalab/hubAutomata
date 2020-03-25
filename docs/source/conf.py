@@ -20,8 +20,8 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'VirtuosoNext'
-copyright = '2020, ArCa'
-author = 'ArCa'
+copyright = '2020, arca.di.uminho.pt'
+author = 'arca.di.uminho.pt'
 
 
 # -- General configuration ---------------------------------------------------
@@ -30,7 +30,9 @@ author = 'ArCa'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinx-prompt',
+    'sphinx_copybutton'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
