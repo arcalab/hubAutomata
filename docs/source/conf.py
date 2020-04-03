@@ -19,7 +19,7 @@ import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------
 
-project = 'VirtuosoNext'
+project = 'Hubs for VirtuosoNext™'
 copyright = '2020, arca.di.uminho.pt'
 author = 'arca.di.uminho.pt'
 

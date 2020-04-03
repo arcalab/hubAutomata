@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.0" width="24" height="24" id="svg2411" xml:space="preserve">
+    <defs id="defs2431" />
+    <linearGradient x1="7.5" y1="7.5" x2="11" y2="11" id="background" gradientUnits="userSpaceOnUse">
+        <stop style="stop-color:#ffffff;stop-opacity:1" offset="0" id="stop2414" />
+        <stop style="stop-color:#d3e1f7;stop-opacity:1" offset="1" id="stop2416" />
+        <midPointStop id="midPointStop2418" style="stop-color:#FFFFFF" offset="0" />
+        <midPointStop id="midPointStop2420" style="stop-color:#FFFFFF" offset="0.5" />
+        <midPointStop id="midPointStop2422" style="stop-color:#D3E1F7" offset="1" />
+    </linearGradient>
+    <circle cx="11" cy="11" r="10" style="fill:url(#background);stroke:#38516a;stroke-width:0.625;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none" id="polygon2424"/>		
+</svg>

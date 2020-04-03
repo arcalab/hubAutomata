@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.0"
+   width="24"
+   height="24"
+   id="svg31359"
+   xml:space="preserve"><defs
+   id="defs31401" />
+			<linearGradient
+   x1="5.9896998"
+   y1="11.4956"
+   x2="10.6252"
+   y2="16.6945"
+   id="XMLID_4_"
+   gradientUnits="userSpaceOnUse"
+   gradientTransform="matrix(2.0909091,0,0,2.5555557,-0.5454545,-17.388889)">
+				<stop
+   style="stop-color:#ffffff;stop-opacity:1"
+   offset="0.0056"
+   id="stop31362" />
+				<stop
+   style="stop-color:#d3e1f7;stop-opacity:1"
+   offset="1"
+   id="stop31364" />
+				<midPointStop
+   id="midPointStop31366"
+   style="stop-color:#FFFFFF"
+   offset="0.0056" />
+				<midPointStop
+   id="midPointStop31368"
+   style="stop-color:#FFFFFF"
+   offset="0.5" />
+				<midPointStop
+   id="midPointStop31370"
+   style="stop-color:#D3E1F7"
+   offset="1" />
+			</linearGradient>
+			<rect
+   width="23"
+   height="23"
+   x="0.50000006"
+   y="0.5"
+   style="fill:url(#XMLID_4_);stroke:#38516a;stroke-width:1"
+   id="rect31372" /> 
+			<linearGradient
+   x1="5.8901"
+   y1="5.0531998"
+   x2="8.9274998"
+   y2="8.4596996"
+   id="XMLID_5_"
+   gradientUnits="userSpaceOnUse">
+				<stop
+   style="stop-color:#ffffff;stop-opacity:1"
+   offset="0.0056"
+   id="stop31375" />
+				<stop
+   style="stop-color:#d3e1f7;stop-opacity:1"
+   offset="1"
+   id="stop31377" />
+				<midPointStop
+   id="midPointStop31379"
+   style="stop-color:#FFFFFF"
+   offset="0.0056" />
+				<midPointStop
+   id="midPointStop31381"
+   style="stop-color:#FFFFFF"
+   offset="0.5" />
+				<midPointStop
+   id="midPointStop31383"
+   style="stop-color:#D3E1F7"
+   offset="1" />
+			</linearGradient>
+			
+			<linearGradient
+   x1="5.9584999"
+   y1="9.1000996"
+   x2="6.6766"
+   y2="9.9055004"
+   id="XMLID_6_"
+   gradientUnits="userSpaceOnUse"
+   gradientTransform="translate(31.25,5.75)">
+				<stop
+   style="stop-color:#ffffff;stop-opacity:1"
+   offset="0.0056"
+   id="stop31388" />
+				<stop
+   style="stop-color:#d3e1f7;stop-opacity:1"
+   offset="1"
+   id="stop31390" />
+				<midPointStop
+   id="midPointStop31392"
+   style="stop-color:#FFFFFF"
+   offset="0.0056" />
+				<midPointStop
+   id="midPointStop31394"
+   style="stop-color:#FFFFFF"
+   offset="0.5" />
+				<midPointStop
+   id="midPointStop31396"
+   style="stop-color:#D3E1F7"
+   offset="1" />
+			</linearGradient>
+			 
+<g
+   transform="matrix(0.2302525,0,0,0.2302525,6.7054669,-2.1072065)"
+   id="g2143">
+			
+
+			<g
+   transform="translate(-39.75,-2.25)"
+   id="g2212">
+				<path
+   d="M 32.382,59.147 C 29.962,59.147 28.001,61.078 28,63.436 L 28,102.691 C 28,105.05 29.962,106.949 32.382,106.949 L 95.07,106.949 C 97.489,106.949 99.452,105.051 99.452,102.691 L 99.452,63.436 C 99.452,61.078 97.489,59.148 95.07,59.147 L 32.382,59.147 z M 43.304,74.486 L 83.771,74.486 L 83.771,92.235 L 43.304,92.235 L 43.304,74.486 z "
+   style="fill:#38516a;fill-opacity:1"
+   id="path2160" />
+
+				<path
+   d="M 90.02,53.652 C 94.268,52.281 96.788,47.914 95.85,43.548 C 93.271,30.587 83.251,20.426 70.334,17.648 C 52.553,13.822 34.822,25.258 30.997,43.043 C 30.186,46.137 31.138,49.426 33.475,51.608 C 35.813,53.791 39.16,54.513 42.189,53.49 C 45.219,52.467 47.442,49.864 47.98,46.71 C 49.827,38.125 58.085,32.787 66.668,34.634 C 73.26,36.052 77.489,40.334 78.806,46.949 C 79.258,49.409 80.749,51.555 82.896,52.839 C 85.042,54.122 87.638,54.418 90.02,53.652 z "
+   style="fill:#38516a;fill-opacity:1"
+   id="path2210" />
+
+			</g>
+
+		</g></svg>

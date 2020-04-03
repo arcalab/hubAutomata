@@ -1,11 +1,8 @@
-Theoretical framework
-*********************
+Publications
+************
 
 If you are interested in knowing more about the theory behind Timed Hub Automata,
 here are some key publications that fuel the toolset.
-
-Key publications
-----------------
 
 **2019**
 

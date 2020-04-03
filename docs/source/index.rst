@@ -23,7 +23,7 @@ The toolset is developed as a sub-module of `ReoLive <https://github.com/ReoLang
 
    try-it
    install
-   foundations
+   publications
 
 VirtuosoNext™ RTOS
 ==================
