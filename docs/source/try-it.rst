@@ -179,6 +179,44 @@ Composition
 
 Preo syntax
 """""""""""
+Composition using the **Preo** syntax is defined in a pointfree style, i.e., without naming the ports.
+
+Composition of hubs and tasks can be sequential ``;`` (outputs to inputs)
+or parallel ``*`` (appending inputs and outputs).
+A type system guarantees that composition is correct.
+
+The sequential composition requires that the number of outputs match the number of inputs in the sequence.
+
+.. code::
+
+    dupl ; fifo  * event
+
+This code specifies a ``duplicator`` hub
+where the first output connects to the input of a ``fifo`` hub,
+and the second output connects to the input of an ``event`` hub.
+
+More complex examples are available in the Examples widget `online <http://arcatools.org/hubs>`_
+(see :ref:`examples-widget`).
+
+Preo syntax is extended as well with integers and booleans expression that can simplify the definition of complex hubs.
+
+
+* `primHub` ``^n`` : `n` hubs of type `primHub`, `n` a positive integer
+* `primHub` ``!`` :  as many `primHub` such that their inputs and outputs connect with correctly with any other hubs that may connect in sequence with *primHub*
+* ...
+
+
+.. code-block::
+    :linenos:
+
+    // for fifo hubs in parallel, composed in sequence with as many merger hubs needed (2 in this case).
+    fifo^4 ; merger!
+
+.. note::
+
+    Checkout `Typed Connector Families and Their Semantics <http://jose.proenca.org/papers/connector-families/scp-cfam.pdf>`_
+    to read the theory that fuels Preo.
+
 
 Treo syntax
 """""""""""
@@ -192,6 +230,9 @@ Hub Automaton of the instance
 -----------------------------
 
 The simplified automaton of the hub...
+
+
+.. _examples-widget:
 
 Examples
 --------
