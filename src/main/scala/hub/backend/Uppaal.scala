@@ -279,6 +279,7 @@ object Uppaal {
     case Pred(name,param) =>
       s"$name(${param.map(p => p match {
         case Fun(n,p) => mkUFormulaGuardFun(n)
+          // Guillermina: missing the other cases?
       }).mkString(",")})"
   }
 
@@ -286,7 +287,7 @@ object Uppaal {
     case "<=" => " &lt;= "
     case "<"  => " &lt;"
     case ">=" => " &gt;= "
-    case "<=" => " &gt; "
+    case ">"  => " &gt; "
     case _ => " " + name + " "
   }
 
@@ -870,9 +871,9 @@ object Uppaal {
     s"""<label kind="guard" x="${from*100+25}" y="-34">${mkCCG(cc,g)}</label>"""
 
   private def mkCCG(cc:CCons,g:Guard):String = //if (cc==CTrue) "" else mkCC(cc)
-    if      (cc==CTrue) Show.showUppaalGuard(g)
+    if      (cc==CTrue) mkUFormulaGuard(g) //Show.showUppaalGuard(g)
     else if (g==Ltrue) mkCC(cc)
-    else mkCC(cc)+" &amp;&amp; "+ Show.showUppaalGuard(g)
+    else mkCC(cc)+" &amp;&amp; "+ mkUFormulaGuard(g) //Show.showUppaalGuard(g)
 
   private def mkUpdates(from:Int,upds:String): String =
     s"""<label kind="assignment" x="${from*100+15}" y="-34">${upds}</label>"""
