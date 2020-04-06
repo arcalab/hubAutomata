@@ -279,6 +279,7 @@ object Uppaal {
     case Pred(name,param) =>
       s"$name(${param.map(p => p match {
         case Fun(n,p) => mkUFormulaGuardFun(n)
+        case _ => Show(p)
           // Guillermina: missing the other cases?
       }).mkString(",")})"
   }
