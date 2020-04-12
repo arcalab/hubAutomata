@@ -11,8 +11,8 @@ Lightweight vs Server mode
     Lightweight vs Server mode
 
 While the toolset is developed in Scala, the code is compiled both into *JVM*
-binaries that are executed on a **server** (*VirtuosoNext*), and into **JavaScript** using
-`ScalaJS <https://wwws.scala- js.org>`_ to produce an interactive web page (*LW VirtuosoNext*).
+binaries that are executed on a **server** (*Full Hubs*), and into **JavaScript** using
+`ScalaJS <https://wwws.scala- js.org>`_ to produce an interactive web page (*LW Hubs*).
 
 Both versions provide *almost* the same functionality, with the server
 additionally supporting the live verification of properties through the Uppaal model checker.
@@ -123,22 +123,103 @@ These can be:
  * non-waiting (NW) – either the requests is served without delay or the request fails
  * waiting with time-out (WT) – waits either until the request is served or the specified time-out has expired.
 
-For example, the following code specifies a task named T1, with an input port ..
+.. note::
 
-.. code:: haskell
-
-    task<T1>(W a?, 4 b!, NW c!)
-
-
-
-.. code:: haskell
-
-    task<T1>(W a?, 4 b!, NW c!) every 5
+    When using the ``every`` construct,
+    the ``n`` must be higher or equal to the total amount of time
+    the task can wait to succeed on requests to its ports. For example,
+    ``task<T1>(4 a!, 5 b!) every 10`` is valid: 4+5 <= 10, while
+    ``task<T1>(NW a!, 5 b!) every 3`` is invalid: 5 > 3.
+    As a consequence, these task cannot have a waiting interaction (``W``).
 
 
+Examples
+""""""""
 
-Tasks are defined as an order sequence of input or output ports,
-each of which can connect to the environment in that order, following as well a specified interaction semantics.
+The following code specifies a task named ``T1``,
+with an input port ``a`` and an output port ``b``.
+
+..  code:: haskell
+
+        task<T1>(W a?, 4 b!)
+
+
+``T1`` first tries to read from the environment on port ``a`` waiting until it succeeds (``W``).
+When it succeeds, it tries to send data through ``b``, but it waits only ``4`` units of time, after this time
+whether it succeeds, it starts again, trying to read in ``a``.
+This semantics is given by the following THA.
+
+.. figure:: _static/imgs/tha/t1.png
+    :align: center
+    :scale: 30 %
+
+    ``T1`` semantics
+
+
+Similarly, the following code specifies a task named ``T2``,
+with an output port ``c``.
+The task **periodically** tries to send data through ``c`` ``every 5`` units of time.
+
+.. code-block:: haskell
+
+    task<T2>(NW c!) every 5
+
+Informally, the tasks tries to send data through ``c`` without waiting (``NW``).
+Whether it succeeds, it will wait 5 units of time before starting again and trying to send data again.
+Formally, this semantics is given by the following THA.
+
+.. figure:: _static/imgs/tha/t2.png
+    :align: center
+    :scale: 30 %
+
+    ``T2`` semantics
+
+Composition
+^^^^^^^^^^^
+
+Preo syntax
+"""""""""""
+Composition using the **Preo** syntax is defined in a pointfree style, i.e., without naming the ports.
+
+Composition of hubs and tasks can be sequential ``;`` (outputs to inputs)
+or parallel ``*`` (appending inputs and outputs).
+A type system guarantees that composition is correct.
+
+The sequential composition requires that the number of outputs match the number of inputs in the sequence.
+
+.. code::
+
+    dupl ; fifo  * event
+
+This code specifies a ``duplicator`` hub
+where the first output connects to the input of a ``fifo`` hub,
+and the second output connects to the input of an ``event`` hub.
+
+More complex examples are available in the Examples widget `online <http://arcatools.org/hubs>`_
+(see :ref:`examples-widget`).
+
+Preo syntax is extended as well with integers and booleans expression that can simplify the definition of complex hubs.
+
+
+* `primHub` ``^n`` : `n` hubs of type `primHub`, `n` a positive integer
+* `primHub` ``!`` :  as many `primHub` such that their inputs and outputs connect with correctly with any other hubs that may connect in sequence with *primHub*
+* ...
+
+
+.. code-block::
+    :linenos:
+
+    // for fifo hubs in parallel, composed in sequence with as many merger hubs needed (2 in this case).
+    fifo^4 ; merger!
+
+.. note::
+
+    Checkout `Typed Connector Families and Their Semantics <http://jose.proenca.org/papers/connector-families/scp-cfam.pdf>`_
+    to read the theory that fuels Preo.
+
+
+Treo syntax
+"""""""""""
 
 Circuit of the instance
 -----------------------
@@ -149,6 +230,9 @@ Hub Automaton of the instance
 -----------------------------
 
 The simplified automaton of the hub...
+
+
+.. _examples-widget:
 
 Examples
 --------
