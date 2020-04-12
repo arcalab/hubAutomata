@@ -21,3 +21,10 @@ sphinx:
 #   version: 3.7
 #   install:
 #     - requirements: docs/requirements.txt
+
+python:
+   install:
+      - method: pip
+        path: .
+        extra_requirements:
+           - sphinx-prompt
