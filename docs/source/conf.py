@@ -30,8 +30,8 @@ author = 'arca.di.uminho.pt'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx_rtd_theme',
     'sphinx-prompt',
+    'sphinx_rtd_theme',
     'sphinx_copybutton'
 ]
 
