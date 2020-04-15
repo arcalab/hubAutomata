@@ -224,7 +224,25 @@ Treo syntax
 Circuit of the instance
 -----------------------
 
-The architectural view of the hub...
+.. figure:: _static/imgs/widgets/circuit.png
+    :align: center
+    :scale: 40 %
+
+    Hub circuit - Two task, ``t1`` and ``t2``, write in sequence to another task ``act``
+
+
+This widget presents the architectural view of the hub specified in the `Hub Composer`, i.e. how primitive hubs
+and tasks are connected to form a more complex hub.
+
+**Blue boxes** with names represent `tasks`;
+**white circles**, if any, represent free `input/output ports`, i.e. ports that haven't been connected yet; and
+**the rest of the nodes** represent `primitive hubs`.
+
+**Arrows** represent `connections` from output to input ports.
+Incoming and outgoing arrows from tasks are labeled with the corresponding interaction semantics
+(``W``, ``NW``, ``n`` - ``n`` a positive integer), the port's name (only when using the **Treo** syntax), and
+the type of port (input or output).
+
 
 Hub Automaton of the instance
 -----------------------------
