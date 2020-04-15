@@ -22,6 +22,8 @@ by the browser using the generated JavaScript libraries.
 Widgets
 =======
 
+.. _composer-widget:
+
 Hub Composer
 ------------
 
@@ -29,7 +31,7 @@ Hub Composer
     :align: center
     :scale: 40 %
 
-    Hub composer - example code
+    Hub composer - Example code
 
 It is **the editor** where users can specify *hubs* and *tasks* with different interaction semantics.
 
@@ -221,6 +223,8 @@ Preo syntax is extended as well with integers and booleans expression that can s
 Treo syntax
 """""""""""
 
+.. _circuit-widget:
+
 Circuit of the instance
 -----------------------
 
@@ -231,7 +235,7 @@ Circuit of the instance
     Hub circuit - Two task, ``t1`` and ``t2``, write in sequence to another task ``act``
 
 
-This widget presents the architectural view of the hub specified in the `Hub Composer`, i.e. how primitive hubs
+This widget shows the architectural view of the hub specified in the `Hub Composer`, i.e. how primitive hubs
 and tasks are connected to form a more complex hub.
 
 **Blue boxes** with names represent `tasks`;
@@ -247,7 +251,28 @@ the type of port (input or output).
 Hub Automaton of the instance
 -----------------------------
 
-The simplified automaton of the hub...
+.. figure:: _static/imgs/widgets/automaton.png
+    :align: center
+    :scale: 40 %
+
+    (Timed) Hub Automaton - Example automaton for a hub ``timer(5)``
+
+
+This widget shows the simplified and serialized automaton of the hub specified in the `Hub Composer`.
+
+A **white circled location** represents the initial state.
+All locations have a **clock invariant**, represented by a purple label next to the location node, e.g. :math:`cl\leq 5` (right location).
+Locations that do not show any clock invariant are locations with trivially satisfied invariants, namely :math:`\top`.
+
+Transitions are labeled as followed:
+
+    - **guard constraint**, represented by a green label within angle brackets, e.g. :math:`\langle \top \rangle`
+    - **clock constraint**, if any, represented by a yellow label following the guard constraint, e.g. :math:`cl == 5` (top transition)
+    - **synchronizing ports**, represented by blue labels, e.g. :math:`in\downarrow`, where :math:`\downarrow` represents an input port, and :math:`\uparrow` an output port
+    - **updates**, if any, represented by a dark blue label, e.g. :math:`bf:=in` (top transition)
+    - **clock updates**, if any, represented by a purple label, e.g. :math:`cl:=0` (top transition)
+
+
 
 
 .. _examples-widget:
