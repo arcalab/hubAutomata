@@ -386,20 +386,20 @@ Hub Automaton Analysis
 This widget provides a summary of some structural properties of the timed hub automaton.
 Currently:
 
-**Memory estimation** -
-minimum memory size (bits) required in terms of data (assumes Integer variables) and clock variables (Float variables),
-and in terms space needed to encode all states.
-Typically :math:`\lceil\log_2(n)\rceil` bits are required to encode n states.
+- **Memory estimation** -
+  minimum memory size (bits) required in terms of data (assumes Integer variables) and clock variables (Float variables),
+  and in terms space needed to encode all states.
+  Typically :math:`\lceil\log_2(n)\rceil` bits are required to encode n states.
 
-**Code size estimation** -
-lines of code needed to encode the hub. Typically one line per: transition, state, variable,
-guard, and assignment instruction. We consider assignment instruction to clock resets and assignments on internal variables.
-Assignments from input to output ports are not consider as such.
+- **Code size estimation** -
+  lines of code needed to encode the hub. Typically one line per: transition, state, variable,
+  guard, and assignment instruction. We consider assignment instruction to clock resets and assignments on internal variables.
+  Assignments from input to output ports are not consider as such.
 
-**Always available ports** -
-information about which ports of the hubb are always ready to synchronise (up to some restrictions).
-This is, ports that are ready to execute in any state of the hub, possibly up to some restrictions imposed by guards, or
-synchronizations with other ports.
+- **Always available ports** -
+  information about which ports of the hubb are always ready to synchronise (up to some restrictions).
+  This is, ports that are ready to execute in any state of the hub, possibly up to some restrictions imposed by guards, or
+  synchronizations with other ports.
 
 For example in a data ``dataEvent`` hub, the input port is always ready to synchronize
 without delay, and without restrictions imposed by the hub - transitions with this port are single-action transitions
@@ -418,10 +418,31 @@ Temporal Logic
     Temporal Logic - example of temporal properties for the automaton of the hub specified in the :ref:`composer-widget`
 
 
-An interactive panel to verify a list of given timed behavioural properties,
-relying on Uppaal running in our servers ...
+This widget is the editor where the user can specify a list of `timed behavioral properties`,
+and (if using the server version) `verify` them relying on an instance of the Uppaal model checker running in our server
+(if using `ArcaTools <http://arcatools.org/assets/hubs.html>`_)
+or the user computer (if using a local installation).
 
-Their result are shown together with the associated Uppaal models and formulas ...
+The properties can be writing using the following grammar.
+
+To analyse the properties the user needs to load the properties
+by either pressing ``shift`` + ``enter`` or by clicking on the load icon on the top right of the widget.
+
+Even when using the lightweight version,
+the widget provides the necessary information to verify each property using Uppaal manually.
+
+After loading the properties, a new box appears showing the results.
+In particular, the result box shows for each property:
+
+- whether it is satisfied (only when using the server version)
+- its encoding using Uppaal's temporal logic syntax.
+  Notice that a property using our logic could be translated into several Uppaal properties.
+  In this case, we show for each Uppaal property whether it is satisfied -
+  all should be satisfied in order to satisfy the original property.
+- the uppaal model needed to verify such a property -
+  depending on the property more or less auxiliary variables may be needed in the model
+  shown together with the associated Uppaal models and formulas ...
+
 
 Uppaal Model
 ------------
