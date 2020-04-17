@@ -316,7 +316,7 @@ Context Switch Analysis
     :align: center
     :scale: 60 %
 
-    Context Switch Analysis - Minimum number of context switches for the trace ``p1,p2`` in the hub example from :ref:`circuit-widget`
+    Context Switch Analysis - Minimum number of context switches for the trace ``p1,p2`` from the hub example from :ref:`circuit-widget`
 
 This widget is an interactive panel to estimate the minimum number of context switches that a given trace in
 the current hub will have if implemented in VirtuosoNext™.
@@ -337,8 +337,8 @@ showing the transitions that follow such a trace and the number of context switc
 In the example, the trace ``p1,p2`` requires in the best case `12 CS`.
 Starting from the initial state `1` it transitions to state `2`
 by executing synchronously ports ``s2``, ``get``, and ``p1``.
-CS occurs when the execution changes from the **Kernel** to some user **task** and vice-versa.
-Hubs execute in the Kernel.
+Context switches occur when the execution changes from the **Kernel** to some user **task** and vice-versa.
+Hubs execute in the Kernel task.
 
 The following table summarises the possible sequence of CS between the Kernel task (executing the hub) and the user
 tasks responsible for the synchronisation requests on ports ``s2``, ``s1``, ``get``, ``p1``, and ``p2``.
@@ -377,12 +377,46 @@ Please notice that this widget is experimental.
 Hub Automaton Analysis
 ----------------------
 
-A summary of some structural properties of the automaton,
-such as estimated required memory, size estimation of the code,
-information about which hubs’ ports are always ready to synchronise ...
+.. figure:: _static/imgs/widgets/analysis.png
+    :align: center
+    :scale: 50 %
+
+    THA Analysis - example of structural properties for the automaton of the hub specified in the :ref:`composer-widget`
+
+This widget provides a summary of some structural properties of the timed hub automaton.
+Currently:
+
+**Memory estimation** -
+minimum memory size (bits) required in terms of data (assumes Integer variables) and clock variables (Float variables),
+and in terms space needed to encode all states.
+Typically :math:`\lceil\log_2(n)\rceil` bits are required to encode n states.
+
+**Code size estimation** -
+lines of code needed to encode the hub. Typically one line per: transition, state, variable,
+guard, and assignment instruction. We consider assignment instruction to clock resets and assignments on internal variables.
+Assignments from input to output ports are not consider as such.
+
+**Always available ports** -
+information about which ports of the hubb are always ready to synchronise (up to some restrictions).
+This is, ports that are ready to execute in any state of the hub, possibly up to some restrictions imposed by guards, or
+synchronizations with other ports.
+
+For example in a data ``dataEvent`` hub, the input port is always ready to synchronize
+without delay, and without restrictions imposed by the hub - transitions with this port are single-action transitions
+and have a trivially satisfied guard. Is worth to mention that there could be restrictions imposed
+by the running environment, such as no immediate sycnhronisation because some other task with higher priority is trying to
+synchronize on other port.
+
 
 Temporal Logic
 --------------
+
+.. figure:: _static/imgs/widgets/logic.png
+    :align: center
+    :scale: 50 %
+
+    Temporal Logic - example of temporal properties for the automaton of the hub specified in the :ref:`composer-widget`
+
 
 An interactive panel to verify a list of given timed behavioural properties,
 relying on Uppaal running in our servers ...
