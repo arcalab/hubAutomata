@@ -419,11 +419,64 @@ Temporal Logic
 
 
 This widget is the editor where the user can specify a list of `timed behavioral properties`,
-and (if using the server version) `verify` them relying on an instance of the Uppaal model checker running in our server
+and (if using the server version) `verify` them by relying on an instance of the Uppaal model checker running in our server
 (if using `ArcaTools <http://arcatools.org/assets/hubs.html>`_)
-or the user computer (if using a local installation).
+or the user's computer (if using a local installation).
 
-The properties can be writing using the following grammar.
+A valid property over a Timed Hub Automata consists of a `path formula` `pf` given by the following grammar
+
+.. code::
+
+      // path formula
+      pf ::= A[] sf | E[] sf | A<> sf | E<> sf | sf --> sf | every a --> b [after n]
+
+      // state formula
+      sf ::= a | doing a | a.done | a waits wm n
+           | not sf | sf $ sf
+           | ecc
+           | deadlock | nothing
+
+      // waiting mode
+      wm ::= atLeast | atMost | lessThan | moreThan (to change)
+
+      // extended clock constraints
+      ecc ::= c # n | c - # n | cc and cc | a.t # n
+
+where `a` and `b` are port names, `n` is an Integer,
+# is in {<,<=,==,>,>=}, and $ is in {`and`, `imply`, `or`}.
+``A`` and ``E`` are the universal and existential quantifiers over paths,
+while ``[]`` and ``<>`` are the universal and existential quantifiers over states.
+``a.t`` is a special clock assigned to port `a` that is set to `0` every time `a` fires --
+after `a` fired, this clock tracks the time since `a` last fired.
+
+========================= ==============================================================
+Construct                      Description
+========================= ==============================================================
+``A[] sf``                 Holds if in **all** possible paths,
+                           ``sf`` holds in **all** states
+``A<> sf``                 Holds if in **all** possible paths,
+                           ``sf`` holds in **at least one** state
+``E[] sf``                 Holds if in **at least one** path,
+                           ``sf`` holds in **all** states
+``E<> sf``                 Holds if in **at least one** path,
+                           ``sf`` holds in **at least one** state
+``sf1 --> sf2``            Holds if whenever in every path where ``sf1`` in some state `s`,
+                           ``sf2`` is eventually satisfied along the path from `s`.
+                           It is a shorthand for ``A[] (sf1 imply (A <> sf2 ))``.
+                           Notice that neither Uppaal nor our logic allows nested
+                           path formulas.
+``every a --> b after n``  Holds if, whenever `a` fires, `b` will fire before `a` fires again,
+                           but after 5 or more units of time since `a` fired.
+``a``                      Holds at the time instance when port `a` fires.
+
+``doing a``                Holds if `a` was the last port to be fired.
+
+``a.done``                 Holds if `a` has fired at least once.
+
+``a waits atMost 5``       Holds in states where, if `a` fired,
+                           then it was less than `5` units ago
+...                       ...
+========================= ==============================================================
 
 To analyse the properties the user needs to load the properties
 by either pressing ``shift`` + ``enter`` or by clicking on the load icon on the top right of the widget.
@@ -431,17 +484,32 @@ by either pressing ``shift`` + ``enter`` or by clicking on the load icon on the 
 Even when using the lightweight version,
 the widget provides the necessary information to verify each property using Uppaal manually.
 
-After loading the properties, a new box appears showing the results.
-In particular, the result box shows for each property:
+.. |showMore| image:: _static/imgs/showMore.svg
+.. |download| image:: _static/imgs/download.svg
 
-- whether it is satisfied (only when using the server version)
-- its encoding using Uppaal's temporal logic syntax.
-  Notice that a property using our logic could be translated into several Uppaal properties.
+After loading the properties, a new box appears showing the results.
+In particular, for each property, the result box shows:
+
+- whether it is satisfied (✓ or ✗). This is shown only when using the server version (Full Hubs)
+- its encoding using Uppaal's temporal logic syntax. This is accessed by clicking on the expand button |showMore|.
+  Notice that a property using our logic might be translated into several Uppaal properties.
   In this case, we show for each Uppaal property whether it is satisfied -
   all should be satisfied in order to satisfy the original property.
-- the uppaal model needed to verify such a property -
-  depending on the property more or less auxiliary variables may be needed in the model
-  shown together with the associated Uppaal models and formulas ...
+- the Uppaal model needed to verify such a property and the property itself encoded using Uppaals' syntax. This can be
+  downloaded by clicking on |download|.
+
+.. figure:: _static/imgs/widgets/verification-open.png
+    :align: center
+    :scale: 50 %
+
+    Verification Information - Output result from loading the properties in the Temporal Logic box.
+
+.. admonition:: One Uppaal model per property
+
+    Depending on the kind of property, the model may need to incorporate more or less auxiliary variables
+    in order to support such a query. For example, `a.done` query requires to add a Boolean variable `a_done` to the model,
+    initialized as false and set to true whenever port `a` fires (never set to false again).
+    Thus, each property has its own Uppaal model.
 
 
 Uppaal Model
