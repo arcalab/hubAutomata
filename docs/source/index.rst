@@ -30,8 +30,7 @@ VirtuosoNext™ RTOS
 
 `VirtuosoNext™ <http://www.altreonic.com/content/product-overview>`_
 is a distributed real-time operating system (RTOS)
-featuring a generic programming model dubbed *Interacting Entities*.
-This paper focuses on these interactions, implemented as so-called *Hubs*.
+featuring a generic programming model dubbed *Interacting Entities*, called *Hubs*.
 Hubs act as synchronisation and communication mechanisms between the application
 tasks and implement the services provided by the kernel
 as a kind of Guarded Protected Action with a well defined semantics.
