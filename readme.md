@@ -1,5 +1,5 @@
 
-#Hubs for VirtuosoNext™ [![Documentation Status](https://readthedocs.org/projects/hubs/badge/?version=latest)](https://hubs.readthedocs.io/en/latest/?badge=latest)
+# Hubs for VirtuosoNext™ [![Documentation Status](https://readthedocs.org/projects/hubs/badge/?version=latest)](https://hubs.readthedocs.io/en/latest/?badge=latest)
 
 
 Hubs for VirtuosoNext™ is a web-based toolset to build, compose, depict, and analyse
