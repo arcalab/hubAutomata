@@ -397,15 +397,11 @@ Currently:
   Assignments from input to output ports are not consider as such.
 
 - **Always available ports** -
-  information about which ports of the hubb are always ready to synchronise (up to some restrictions).
+  information about which ports of the hub are always ready to synchronise (up to some restrictions).
   This is, ports that are ready to execute in any state of the hub, possibly up to some restrictions imposed by guards, or
-  synchronizations with other ports.
-
-For example in a data ``dataEvent`` hub, the input port is always ready to synchronize
-without delay, and without restrictions imposed by the hub - transitions with this port are single-action transitions
-and have a trivially satisfied guard. Is worth to mention that there could be restrictions imposed
-by the running environment, such as no immediate sycnhronisation because some other task with higher priority is trying to
-synchronize on other port.
+  synchronizations with other ports. For example in a data ``dataEvent`` hub, the input port is always ready to synchronize
+  without delay, and without restrictions imposed by the hub - transitions with this port are single-action transitions
+  and have a trivially satisfied guard.
 
 
 Temporal Logic
@@ -423,16 +419,29 @@ and (if using the server version) `verify` them by relying on an instance of the
 (if using `ArcaTools <http://arcatools.org/assets/hubs.html>`_)
 or the user's computer (if using a local installation).
 
-A valid property over a Timed Hub Automata consists of a `path formula` `pf` given by the following grammar
+The grammar
+^^^^^^^^^^^
 
-.. code::
+Properties are given using a **dynamic temporal logic** proposed for Timed Hub Automata,
+which can be seen as a subset of Uppaal Timed Computation Tree Logic (TCTL).
+This logic provides new operators to reason about the behaviour of the systems
+focusing on **actions**, i.e., on ports that are fired rather than on locations as Uppaal TCTL.
+
+TCTL properties are described using path formulas and state formulas. A
+path formula quantifies over paths of the underlying transition system, while
+a state formula quantifies over a single state of such system.
+
+A valid property consists of a `path formula` `pf` given by the following grammar
+
+.. code:: none
 
       // path formula
       pf ::= A[] sf | E[] sf | A<> sf | E<> sf | sf --> sf | every a --> b [after n]
 
       // state formula
       sf ::= a | doing a | a.done | a waits wm n
-           | not sf | sf $ sf
+           | not sf
+           | sf and sf | sf imply sf | sf or sf
            | ecc
            | deadlock | nothing
 
@@ -440,18 +449,23 @@ A valid property over a Timed Hub Automata consists of a `path formula` `pf` giv
       wm ::= atLeast | atMost | lessThan | moreThan (to change)
 
       // extended clock constraints
-      ecc ::= c # n | c - # n | cc and cc | a.t # n
+      ecc ::= c # n | c - # n | ecc and ecc | a.t # n
 
-where `a` and `b` are port names, `n` is an Integer,
-# is in {<,<=,==,>,>=}, and $ is in {`and`, `imply`, `or`}.
+      // clock constraints operators
+      # :: =  < | <= | == | >= | >
+
+where `a` and `b` are port names, `c` is a clock, and `n` is an Integer.
 ``A`` and ``E`` are the universal and existential quantifiers over paths,
 while ``[]`` and ``<>`` are the universal and existential quantifiers over states.
-``a.t`` is a special clock assigned to port `a` that is set to `0` every time `a` fires --
+``a.t`` is a special clock assigned to port `a` that is set to `0` every time `a` fires -- i.e.,
 after `a` fired, this clock tracks the time since `a` last fired.
 
-========================= ==============================================================
+The following table describes intuitively when each formuly is satisfied.
+For a formal definition of satisfaction checkout `the technical report  <#>`_.
+
+========================= =======================================================================
 Construct                      Description
-========================= ==============================================================
+========================= =======================================================================
 ``A[] sf``                 Holds if in **all** possible paths,
                            ``sf`` holds in **all** states
 ``A<> sf``                 Holds if in **all** possible paths,
@@ -476,7 +490,27 @@ Construct                      Description
 ``a waits atMost 5``       Holds in states where, if `a` fired,
                            then it was less than `5` units ago
 ...                       ...
-========================= ==============================================================
+``not sf``                 Holds in states where sf is not satisfied
+``sf1 and sf2``            Holds in states where both ``sf1`` and ``sf2`` are satisfied
+``sf1 or sf2``             Holds in states where ``sf1`` or ``sf2`` are satisfied
+``sf1 imply sf2``          Holds in states where if ``sf1`` is satisfied, ``sf2`` is satisfied as well.
+                           In states where ``sf1`` is not satisfied
+                           the property is trivially satisfied.
+``nothing``                Holds in states where no action has fired previously.
+``deadlock``               Holds in states where there are no outgoing action transitions
+                           neither from the state itself or any of its delay successors.
+``c # n``                  Holds in states where the current value of clock c, :math:`\eta(c)`,
+                           satisfies the condition :math:`\eta(c) ~\#~ n`.
+``c1 - c2 # n``            Holds in states where the current value of clock c1 and c2,
+                           satisfy the condition :math:`\eta(c1) - \eta(c2) ~\#~ n`.
+``ecc1 and ecc1``          Holds in states where both clock constraints ``ecc1`` and ``ecc2`` are
+                           satisfied.
+``a.t # n``                Holds in states where the current value of clock ``a.t``
+                           satisfies the condition :math:`\eta(a.t) ~\#~ n`.
+========================= =======================================================================
+
+The widget
+^^^^^^^^^^
 
 To analyse the properties the user needs to load the properties
 by either pressing ``shift`` + ``enter`` or by clicking on the load icon on the top right of the widget.
