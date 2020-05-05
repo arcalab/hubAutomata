@@ -56,17 +56,21 @@ object TemporalFormulaParser extends RegexParsers {
   def singleStFormula:Parser[StFormula] =
     deadlock |
 //    """nothing""".r ^^ { _ => Nothing} |
-    "doing"~>identifier ^^ DoingAction |
-    identifier<~".done" ^^ {DoneAction(_)} |
-    identifier~"waits"~waitMode~int ^^ {case id~_~mode~t => Waits(Action(id),mode,t.toInt)} |
+    identifier<~".doing"  ^^ DoingAction |
+    identifier<~".done"   ^^ DoneAction |
+    identifier~"refiresAfterOrAt" ~int  ^^ {case id~mode~t => Refires(Action(id),RAfterOrAt,t.toInt)} |
+    identifier~"refiresBeforeOrAt"~int  ^^ {case id~mode~t => Refires(Action(id),RBeforeOrAt,t.toInt)} |
+    identifier~"refiresAfter"     ~int  ^^ {case id~mode~t => Refires(Action(id),RAfter,t.toInt)} |
+    identifier~"refiresBefore"    ~int  ^^ {case id~mode~t => Refires(Action(id),RBefore,t.toInt)} |
+//    identifier~"waits"~waitMode~int ^^ {case id~_~mode~t => Waits(Action(id),mode,t.toInt)} |
     identifier~opt(".t")~intCond ^^ {case id1~t~cond => CGuard(cond(id1+t.getOrElse("")))} |
     identifier ^^ Action
 
-  def waitMode:Parser[WaitMode] =
-    "atLeast".r ^^ {_ => AtLeast}  |
-    "atMost".r  ^^ {_ => AtMost}  |
-    "moreThan".r ^^ {_ => MoreThan} |
-    "lessThan".r ^^ {_ => LessThan}
+//  def waitMode:Parser[WaitMode] =
+//    "atLeast".r ^^ {_ => AtLeast}  |
+//    "atMost".r  ^^ {_ => AtMost}  |
+//    "moreThan".r ^^ {_ => MoreThan} |
+//    "lessThan".r ^^ {_ => LessThan}
 
   def boolCond:Parser[StFormula => StFormula] =
     "or"~>stFormula ^^ (f => (f1: StFormula) => Or(f1, f)) |

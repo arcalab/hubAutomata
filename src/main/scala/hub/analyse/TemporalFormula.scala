@@ -71,7 +71,7 @@ sealed trait TemporalFormula {
     case EveryAfter(a,b,t) => Set(a.name,b.name)
   }
 
-  def waitModes:Set[WaitMode] = this match {
+  def waitModes:Set[RefireMode] = this match {
     case AA(f) => f.waitModes
     case AE(f) => f.waitModes
     case EA(f) => f.waitModes
@@ -117,7 +117,7 @@ sealed trait StFormula {
   }
 
   def hasWaits:Boolean = this match {
-    case Waits(a,m,t) => true
+    case Refires(a,m,t) => true
     case And(f1,f2)     => f1.hasWaits || f2.hasWaits
     case Or(f1,f2)      => f1.hasWaits || f2.hasWaits
     case Imply(f1,f2)   => f1.hasWaits || f2.hasWaits
@@ -132,7 +132,7 @@ sealed trait StFormula {
     case Or(f1,f2)      => f1.hasDone || f2.hasDone
     case Imply(f1,f2)   => f1.hasDone || f2.hasDone
     case Not(f1)        => f1.hasDone
-    case Waits(_,_,_)   => true
+    case Refires(_,_,_)   => true
     case _              => false
   }
 
@@ -145,7 +145,7 @@ sealed trait StFormula {
     case And(f1,f2) => f1.actions++f2.actions
     case Or(f1,f2) => f1.actions++f2.actions
     case Imply(f1,f2) => f1.actions++f2.actions
-    case Waits(a,m,t) => Set(a.name)
+    case Refires(a,m,t) => Set(a.name)
     case Until(f1,f2) => f1.actions++f2.actions
     case Before(f1,f2) => f1.actions++f2.actions
     case CGuard(cc) => cc.clocks.filter(_.endsWith(".t")).map(_.dropRight(2)).toSet
@@ -153,8 +153,8 @@ sealed trait StFormula {
 
   }
 
-  def waitModes:Set[WaitMode] = this match {
-    case Waits(a,m,t) => Set(m)
+  def waitModes:Set[RefireMode] = this match {
+    case Refires(a,m,t) => Set(m)
     case And(f1,f2)     => f1.waitModes ++ f2.waitModes
     case Or(f1,f2)      => f1.waitModes ++ f2.waitModes
     case Imply(f1,f2)   => f1.waitModes ++ f2.waitModes
@@ -170,21 +170,21 @@ case class DGuard(g:Guard)                  extends StFormula
 case class CGuard(c:CCons)                  extends StFormula
 case class Action(name: String)             extends StFormula
 case class DoneAction(name: String)         extends StFormula
-case class DoingAction(a:String)            extends StFormula
+case class DoingAction(name:String)         extends StFormula
 case class Not(f:StFormula)                 extends StFormula
 case class And(f1:StFormula, f2:StFormula)  extends StFormula
 case class Or(f1:StFormula, f2:StFormula)   extends StFormula
 case class Imply(f1:StFormula,f2:StFormula) extends StFormula
 
-case class Waits(a:Action,mod:WaitMode,t:Int) extends StFormula
+case class Refires(a:Action, mod:RefireMode, t:Int) extends StFormula
 
 case class Until(f1:StFormula,f2:StFormula) extends StFormula
 case class Before(f1:StFormula,f2:StFormula)extends StFormula
 
 
-sealed trait WaitMode
+sealed trait RefireMode
 
-case object AtLeast     extends WaitMode
-case object AtMost      extends WaitMode
-case object MoreThan extends WaitMode
-case object LessThan extends WaitMode
+case object RAfterOrAt    extends RefireMode
+case object RBeforeOrAt   extends RefireMode
+case object RAfter        extends RefireMode
+case object RBefore       extends RefireMode

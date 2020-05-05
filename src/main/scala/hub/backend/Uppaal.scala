@@ -472,6 +472,7 @@ object Uppaal {
 
 //      observers+hubAut
       Set(hubAut)
+    case _ => throw new FormulaException(s"${Show(f)} is not a valid formula")
   }
 
 
@@ -601,9 +602,10 @@ object Uppaal {
       val (a1,cc1) = collectFirstOf(f1)
       val (a2,cc2) = collectFirstOf(f2)
       (a1++a2,cc1++cc2)
-    case DoingAction(_) => throw new FormulaException("Doing clauses are not allow inside a until formula")
-    case Before(_, _) => throw new FormulaException("Before clauses are not allow inside a until formula")
-    case Until(_, _)  => throw new FormulaException("Until clauses are not allow inside a until formula")
+//    case DoingAction(_) => throw new FormulaException("Doing clauses are not allow inside a until formula")
+//    case Before(_, _) => throw new FormulaException("Before clauses are not allow inside a until formula")
+//    case Until(_, _)  => throw new FormulaException("Until clauses are not allow inside a until formula")
+    case _ => throw new FormulaException(s"${Show(f)} is not allowed inside an until formula")
   }
 
 
@@ -679,9 +681,10 @@ object Uppaal {
       case And(f1,f2)     => UAnd(mkFirstOf(f1),mkFirstOf(f2))
       case Or(f1,f2)      => UOr(mkFirstOf(f1),mkFirstOf(f2))
       case Imply(f1,f2)   => UImply(mkFirstOf(f1),mkFirstOf(f2))
-      case DoingAction(_) | DoneAction(_) => throw new FormulaException("Cannot make a firstTime clause of a Doing/Done an action clause.")
-      case Until(f1,f2)   => throw new FormulaException("Cannot make a firstTime clause of a Until clause.")
-      case Before(f1,f2)  => throw new FormulaException("Cannot make a firstTime clause of a Before clause.")
+//      case DoingAction(_) | DoneAction(_) => throw new FormulaException("Cannot make a firstTime clause of a Doing/Done an action clause.")
+//      case Until(f1,f2)   => throw new FormulaException("Cannot make a firstTime clause of a Until clause.")
+//      case Before(f1,f2)  => throw new FormulaException("Cannot make a firstTime clause of a Before clause.")
+      case _ => throw new FormulaException(s"Cannot make a firstTime clause for ${Show(f)}")
     }
 
     def stf2UStF(st: StFormula): UppaalStFormula = st match {
@@ -708,9 +711,10 @@ object Uppaal {
         res
       case Before(f1, f2) =>
         throw new FormulaException("Only single actions are supported on an eventually before clause")
-      case Waits(a,mode,t) if mode == AtMost || mode == LessThan =>
-        UImply(mkFirstOf(a),mode2UStF(a,mode,t))
-      case Waits(a,mode,t) => // atLeast or moreThan
+      case Refires(a,mode,t) if mode == RBeforeOrAt || mode == RBefore =>
+        //UImply(mkFirstOf(a),mode2UStF(a,mode,t))
+        mode2UStF(a,mode,t)
+      case Refires(a,mode,t) => // atLeast or moreThan
         val locsOfA: Set[UppaalStFormula] = act2locs.getOrElse(a.name, Set()).map(l => Location("Hub.L" + portToString(l)))
         var res:UppaalStFormula = UTrue
         if (locsOfA.nonEmpty) {
@@ -720,11 +724,11 @@ object Uppaal {
         res
     }
 
-    def mode2UStF(a: Action, mode: WaitMode, t: Int):UppaalStFormula = mode match {
-      case AtLeast  => UCGuard(GE(clock(a.name),CInt(t)))
-      case AtMost   => UCGuard(LE(clock(a.name),CInt(t)))
-      case MoreThan => UCGuard(GT(clock(a.name),CInt(t)))
-      case LessThan => UCGuard(LT(clock(a.name),CInt(t)))
+    def mode2UStF(a: Action, mode: RefireMode, t: Int):UppaalStFormula = mode match {
+      case RAfterOrAt  => UCGuard(GE(clock(a.name),CInt(t)))
+      case RBeforeOrAt   => UCGuard(LE(clock(a.name),CInt(t)))
+      case RAfter => UCGuard(GT(clock(a.name),CInt(t)))
+      case RBefore => UCGuard(LT(clock(a.name),CInt(t)))
     }
 
     if (act2port.map(_._1).toSet.intersect(formula.actions) == formula.actions )

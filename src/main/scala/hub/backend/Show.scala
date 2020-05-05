@@ -71,8 +71,8 @@ object Show {
     case Nothing => "nothing"
     case TFTrue => "true"
     case Action(a) => a
-    case DoingAction(a) => "doing " + a
-    case DoneAction(a) =>  a +".done"
+    case DoingAction(a) => a + ".doing"
+    case DoneAction(a) =>  a + ".done"
     case DGuard(g) => apply(g)
     case CGuard(g) => apply(g)
 //    case Can(f1) => "can ("+apply(f1)+")"
@@ -82,14 +82,14 @@ object Show {
     case Imply(f1,f2) => "(" + apply(f1) + " imply " + apply(f2) + ")"
     case Before(f1,f2) => apply(f1) + " before " + apply(f2)
     case Until(f1,f2) => apply(f1) + " until " + apply(f2)
-    case Waits(a,mode,t) => apply(a) + " waits " + apply(mode) + " " + t
+    case Refires(a,mode,t) => apply(a) + " refires" + apply(mode) + " " + t
   }
 
-  def apply(mode: WaitMode):String = mode match {
-    case AtLeast => "atLeast"
-    case AtMost => "atMost"
-    case MoreThan => "moreThan"
-    case LessThan => "lessThan"
+  def apply(mode: RefireMode):String = mode match {
+    case RAfterOrAt => "AfterOrAt"
+    case RBeforeOrAt => "BeforeOrAt"
+    case RAfter => "After"
+    case RBefore => "Before"
   }
 
   def apply(f:UppaalFormula): String = f match {
