@@ -1,14 +1,17 @@
 Using the tools
 ***************
 
-Lightweight vs Server mode
-===========================
+.. |showMore| image:: _static/imgs/showMore.svg
+.. |download| image:: _static/imgs/download.svg
+
+Server vs Lightweight mode
+==========================
 
 .. figure:: _static/imgs/lw-vs-server.png
     :align: center
     :target: _static/imgs/lw-vs-server.png
 
-    Lightweight vs Server mode
+    Server (Full Hubs) vs Lightweight mode (LW Hubs)
 
 While the toolset is developed in Scala, the code is compiled both into *JVM*
 binaries that are executed on a **server** (*Full Hubs*), and into **JavaScript** using
@@ -101,9 +104,9 @@ Hub                 Keyword
 
 Newly proposed hubs
 
-======================== ==========================
+======================== ============================================
 Hub                      Keyword
-======================== ==========================
+======================== ============================================
 |drain| Drain            ``drain``
 |merger| Merger          ``merger``
 |xor| Exclusive Router   ``xor``
@@ -113,8 +116,8 @@ Hub                      Keyword
 |fifoF| FIFOFull         ``fifoFull``
 |bbF| BlackBoardFull     ``blackboardFull``
 |timer| Timer            ``timer`` or ``timer(n)``
-                         (*n* a positive integer)
-======================== ==========================
+                         (*n* a positive integer, *0* when omitted)
+======================== ============================================
 
 
 Tasks
@@ -206,7 +209,7 @@ A type system guarantees that composition is correct.
 
 The sequential composition requires that the number of outputs match the number of inputs in the sequence.
 
-.. code::
+.. code:: 
 
     dupl ; fifo  * event
 
@@ -214,19 +217,16 @@ This code specifies a ``duplicator`` hub
 where the first output connects to the input of a ``fifo`` hub,
 and the second output connects to the input of an ``event`` hub.
 
-More complex examples are available in the Examples widget `online <http://arcatools.org/hubs>`_
-(see :ref:`examples-widget`).
+More complex examples are available in the :ref:`examples-widget` widget `online <http://arcatools.org/hubs>`_.
 
 Preo syntax is extended as well with integers and booleans expression that can simplify the definition of complex hubs.
 
 
-* `primHub` ``^n`` : `n` hubs of type `primHub`, `n` a positive integer
-* `primHub` ``!`` :  as many `primHub` such that their inputs and outputs connect with correctly with any other hubs that may connect in sequence with *primHub*
-* ...
-
+* `hub` ``^n`` : `n` hubs of type `hub`, `n` a positive integer
+* `hub` ``!`` :  as many `hub` such that their inputs and outputs connect correctly with another hubs
+  that may connect in sequence with *hub*
 
 .. code-block::
-    :linenos:
 
     // for fifo hubs in parallel, composed in sequence with as many merger hubs needed (2 in this case).
     fifo^4 ; merger!
@@ -403,6 +403,7 @@ Currently:
   without delay, and without restrictions imposed by the hub - transitions with this port are single-action transitions
   and have a trivially satisfied guard.
 
+.. _temporal-widget:
 
 Temporal Logic
 --------------
@@ -439,14 +440,12 @@ A valid property consists of a `path formula` `pf` given by the following gramma
       pf ::= A[] sf | E[] sf | A<> sf | E<> sf | sf --> sf | every a --> b [after n]
 
       // state formula
-      sf ::= a | doing a | a.done | a waits wm n
+      sf ::= a | a.doing | a.done
+           | a refiresAfter n | a refiresAfterOrAt n | a refiresBefore n | a refiresBeforeOrAt n |
            | not sf
            | sf and sf | sf imply sf | sf or sf
            | ecc
            | deadlock | nothing
-
-      // waiting mode
-      wm ::= atLeast | atMost | lessThan | moreThan (to change)
 
       // extended clock constraints
       ecc ::= c # n | c - # n | ecc and ecc | a.t # n
@@ -482,14 +481,16 @@ Construct                      Description
 ``every a --> b after n``  Holds if, whenever `a` fires, `b` will fire before `a` fires again,
                            but after 5 or more units of time since `a` fired.
 ``a``                      Holds at the time instance when port `a` fires.
-
-``doing a``                Holds if `a` was the last port to be fired.
-
+``a.doing``                Holds if `a` was the last port to be fired.
 ``a.done``                 Holds if `a` has fired at least once.
-
-``a waits atMost 5``       Holds in states where, if `a` fired,
-                           then it was less than `5` units ago
-...                       ...
+``a refiresAfter n``       Holds in states where, if `a` fired,
+                           then it cannot refire until more than `n` units of time passed.
+``a refiresAfterOrAt n``   Holds in states where, if `a` fired,
+                           then it cannot refire until `n` or more units of time passed.
+``a refiresBefore n``      Holds in states where `a` fires
+                           before less than `n` units of time passed since the beginning or since it last fired.
+``a refiresBeforeOrAt n``  Holds in states where `a` fires
+                           before `n` or less units of time passed since the beginning or since it last fired.
 ``not sf``                 Holds in states where sf is not satisfied
 ``sf1 and sf2``            Holds in states where both ``sf1`` and ``sf2`` are satisfied
 ``sf1 or sf2``             Holds in states where ``sf1`` or ``sf2`` are satisfied
@@ -517,9 +518,6 @@ by either pressing ``shift`` + ``enter`` or by clicking on the load icon on the 
 
 Even when using the lightweight version,
 the widget provides the necessary information to verify each property using Uppaal manually.
-
-.. |showMore| image:: _static/imgs/showMore.svg
-.. |download| image:: _static/imgs/download.svg
 
 After loading the properties, a new box appears showing the results.
 In particular, for each property, the result box shows:
@@ -549,8 +547,17 @@ In particular, for each property, the result box shows:
 Uppaal Model
 ------------
 
-The timed automaton to be imported by Uppaal model checker...
+.. figure:: _static/imgs/widgets/uppaal.png
+    :align: center
+    :scale: 50 %
 
+    Uppaal Model - Uppaal timed automaton model of the hub specified in the `Hub Composer`.
+
+This widget provides the base Uppaal timed automaton model of the hub specified in the `Hub Composer`.
+By base we mean that the model does not have any auxiliary variable or committed states in between states of the original model, as is the case
+with Uppaal models generated in the :ref:`temporal-widget` widget.
+
+The model can be downloaded |download| and imported into the Uppaal model checker for further analysis.
 
 
 
