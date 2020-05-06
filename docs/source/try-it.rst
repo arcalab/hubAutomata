@@ -63,6 +63,7 @@ This is explained below in further detail.
     The hub can be loaded either by pressing ``shift`` + ``enter`` in the `Hub Composer`, or
     by clicking in the update icon on the top right of the widget.
 
+
 Primitive Hubs
 ^^^^^^^^^^^^^^
 
@@ -199,6 +200,8 @@ Formally, this semantics is given by the following THA.
 Composition
 ^^^^^^^^^^^
 
+.. _preo:
+
 Preo syntax
 """""""""""
 Composition using the **Preo** syntax is defined in a pointfree style, i.e., without naming the ports.
@@ -209,7 +212,7 @@ A type system guarantees that composition is correct.
 
 The sequential composition requires that the number of outputs match the number of inputs in the sequence.
 
-.. code:: 
+.. code::
 
     dupl ; fifo  * event
 
@@ -236,9 +239,73 @@ Preo syntax is extended as well with integers and booleans expression that can s
     Checkout `Typed Connector Families and Their Semantics <http://jose.proenca.org/papers/connector-families/scp-cfam.pdf>`_
     to read the theory behind Preo.
 
+.. _treo:
 
 Treo syntax
 """""""""""
+
+In the **Treo** syntax hubs are specified by explicitly naming their port.
+
+Furthermore, a new hub needs to be declare in a function like manner, by specifying their ports as parameters
+and declaring whether each parameter is an input port ``?`` or an output port ``!``.
+
+Composition is specified by declaring two hubs separeted with spaces.
+Composed hubs with shared port names will synchronize over such ports.
+
+.. code::
+
+    // Main block (Preo Syntax)
+    // uses the hub myDupl specified in the code block
+    myHub
+
+    {
+        // a hub using Treo syntax
+        myDupl(in?,out1!,out2!) =
+            dupl(in,o1,o2)
+            fifo(o1,out1)
+            event(o2,out2)
+        ,
+
+        // an equivalent hub to myDupl, declared using Preo syntax
+        otherDupl = dupl ; fifo * event
+    }
+
+More complex examples are available in the :ref:`examples-widget` widget `online <http://arcatools.org/hubs>`_.
+
+
+Specifying Hubs
+^^^^^^^^^^^^^^^
+
+THe main Hub is specified following the :ref:`preo`.
+
+It is possible to declare various hubs, using the :ref:`preo` or :ref:`treo`,
+by declaring them in a function like manner inside a block `{ }` and referencing their names.
+Various hubs specified inside the block are separated by ``,``.
+
+.. code::
+
+    // Main block (Preo Syntax)
+    // uses the hub myDupl specified in the code block
+    timer(5) ; myHub
+
+    {
+        // a hub using Treo syntax
+        myDupl(in?,out1!,out2!) =
+            dupl(in,o1,o2)
+            fifo(o1,out1)
+            event(o2,out2)
+        ,
+
+        // an equivalent hub to myDupl, declared using Preo syntax
+        otherDupl = dupl ; fifo * event
+
+        ,
+
+        // yet another hub equivalent to myDupl
+        yetAnotherDupl(i?, o1!, o2!) = otherDupl(i,o1,o2)
+
+    }
+
 
 .. _circuit-widget:
 
