@@ -14,7 +14,7 @@ Requirements
 ============
 
 * Scala building tools (`SBT <https://www.scala-sbt.org>`_)
-* `Uppaal <uppaal.org>`_ Real-Time Model Checker
+* `Uppaal <uppaal.org>`_ Real-Time Model Checker (optional)
 * Java Runtime Environment (`JRE <https://www.java.com/en/download/>`_)
 
 
