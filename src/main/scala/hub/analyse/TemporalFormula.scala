@@ -15,14 +15,14 @@ sealed trait TemporalFormula {
 //    case _          => false
 //  }
 
-  def isComplex:Boolean = this.hasEvery || this.hasUntil || this.hasBefore || this.hasWaits
+  def isComplex:Boolean = this.hasEvery || this.hasUntil || this.hasBefore || this.hasRefires
 
-  def hasWaits:Boolean = this match {
-    case AA(f) => f.hasWaits
-    case AE(f) => f.hasWaits
-    case EA(f) => f.hasWaits
-    case EE(f) => f.hasWaits
-    case Eventually(f1,f2) => f1.hasWaits || f2.hasWaits
+  def hasRefires:Boolean = this match {
+    case AA(f) => f.hasRefires
+    case AE(f) => f.hasRefires
+    case EA(f) => f.hasRefires
+    case EE(f) => f.hasRefires
+    case Eventually(f1,f2) => f1.hasRefires || f2.hasRefires
     case _ => false
   }
 
@@ -116,12 +116,12 @@ sealed trait StFormula {
     case _              => false
   }
 
-  def hasWaits:Boolean = this match {
+  def hasRefires:Boolean = this match {
     case Refires(a,m,t) => true
-    case And(f1,f2)     => f1.hasWaits || f2.hasWaits
-    case Or(f1,f2)      => f1.hasWaits || f2.hasWaits
-    case Imply(f1,f2)   => f1.hasWaits || f2.hasWaits
-    case Not(f1)        => f1.hasWaits
+    case And(f1,f2)     => f1.hasRefires || f2.hasRefires
+    case Or(f1,f2)      => f1.hasRefires || f2.hasRefires
+    case Imply(f1,f2)   => f1.hasRefires || f2.hasRefires
+    case Not(f1)        => f1.hasRefires
     case _              => false
   }
 

@@ -37,6 +37,13 @@ sealed trait Update {
 
   def vars:Set[Var] = prod ++ dep
 
+  def constants:Set[Cons] = this match {
+    case Asg(x,e) => e.constants
+    case Par(u1,u2) => u1.constants ++ u2.constants
+    case Seq(u1,u2) => u1.constants ++ u2.constants
+    case Noop => Set()
+  }
+
   def instance:Update = {
     DependencyGraph((this)).getTopologicalOrder match  {
       case None => throw new RuntimeException("Impossible to serialize")
@@ -93,6 +100,12 @@ sealed trait Expr {
     case Val(_) => Set()
     case Cons(_,_) => Set()
     case Fun(_,args) => args.toSet.flatMap((_:Expr).vars)
+  }
+
+  def constants:Set[Cons] = this match {
+    case c@Cons(_,_) => Set(c)
+    case Fun(_,args) => args.flatMap(_.constants).toSet
+    case _ => Set()
   }
 
   override def toString = Show(this)

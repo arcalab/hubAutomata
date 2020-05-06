@@ -15,6 +15,14 @@ sealed trait Guard {
     case LAnd(g1, g2) => g1.vars ++ g2.vars
   }
 
+  def constants:Set[Cons] = this match {
+    case Ltrue => Set()
+    case Pred(_,param) => param.flatMap(_.constants).toSet
+    case LNot(g) => g.constants
+    case LOr(g1, g2) => g1.constants ++ g2.constants
+    case LAnd(g1, g2) => g1.constants ++ g2.constants
+  }
+
   def ||(other:Guard): Guard = LOr(this,other)
   def &&(other:Guard): Guard = LAnd(this,other)
 }

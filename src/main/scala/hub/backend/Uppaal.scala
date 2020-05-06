@@ -63,14 +63,12 @@ object Uppaal {
     // all clocks to declare (everything global for now to simplify naming)
     val clocks:Set[String] = uppaals.flatMap(u=>u.clocks)
     // get all variables to declare
-    var vars:Set[Var] = uppaals.flatMap(u=> u.edges.map(e=>e.upd).flatMap(u=>u.vars))
-    // ignore for know other variables that were not created for verification purposes
-    var vvars:Set[Var] = vars.filter(v=>v.name.startsWith("done"))
-    var portvars:Set[Var] = vars.filter(v=>v.name.startsWith("P"))
-    var intvars:Set[Var] = vars.filter(v=>v.name.startsWith("since"))
+    var vars:Set[Var] = uppaals.flatMap(u=> u.edges.flatMap(e=>e.upd.vars ++ e.guard.vars))
     // initialize variables (just ports for now)
     var initVars = uppaals.flatMap(u=>u.initVal).filter(i=> i._1.name.startsWith("P"))
-    portvars = portvars -- initVars.map(i=>i._1)
+    // removed port variables already initialized
+    var portvars = vars.filter(v=>v.name.startsWith("P")) -- initVars.map(i=>i._1)
+    // channels
     val channels:Set[String] = uppaals.flatMap(u=> u.edges).flatMap(e=>e.ports).filter(p=> p.endsWith("!") || p.endsWith("?"))
     val simpleCh:Set[String] = channels.filterNot(_.startsWith("priority"))
     var priorityCh:List[String] = channels.filter(_.startsWith("priority")).map(_.dropRight(1)).toList
@@ -83,8 +81,8 @@ object Uppaal {
        |// clocks:
        |${if (clocks.nonEmpty) clocks.mkString("clock ", ",", ";") else ""}
        |// variables:
-       |${mkVariables(vvars++portvars++intvars)}
-       |
+       |${mkVariables(vars--initVars.map(i=>i._1))}
+       |${mkConstants(uppaals.flatMap(u=> u.edges.flatMap(e=>e.upd.constants ++ e.guard.constants)))}
        |${if (initVars.nonEmpty) initVars.map(i => "bool " + Show(Asg(i._1,i._2))).mkString("",";\n",";\n") else ""}
        |// Channels (actions)
        |${if (simpleCh.nonEmpty) simpleCh.map(_.dropRight(1)).mkString("chan ",",",";") else ""}
@@ -147,7 +145,7 @@ object Uppaal {
 //      val brcast:Set[String] = if ((hub.taskPort._1++hub.taskPort._2).intersect(acts).nonEmpty) Set(broadcast()) else Set()
       // add a dummy broadcast chan based on the priority of the edge
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,to,names.map(a=>chan(a))+priority(prio),cc,cr++names.map(a => clock(a)),g,tacts & facts)//u)
+      newedges += UppaalEdge(from,to,names.map(a=>chan(a))+priority(prio),cc,cr++names.map(a => clock(a)),g,tacts & facts & renameDataVars(u,hub))//u)
       // second part of the edge, from the new committed state
 //      newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
@@ -182,7 +180,7 @@ object Uppaal {
       var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
       // add a dummy broadcast chan based on the priority of the edge
       // first part of the edge, to a new committed state
-      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g, tacts & facts)//u)
+      newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g, tacts & facts & renameDataVars(u,hub))//u)
       // second part of the edge, from the new committed state
       newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds)//executions)
       // accumulate new committed state
@@ -211,7 +209,7 @@ object Uppaal {
     if (validFormula(tf,hub))
       tf match {
     //    case f@Until(f1,f2) => fromUntil(f,Simplify(hub))
-      case f if f.hasWaits || f.hasDone => Set(mkWithCommitted(Simplify(hub)))
+      case f if f.hasRefires || f.hasDone => Set(mkWithCommitted(Simplify(hub)))
       case Every(a,b) => Set(fromEvery(a,b,Simplify(hub)))//fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub))
       case f@EveryAfter(a,b,t) => Set(fromEvery(a,b,Simplify(hub))) //fromEventuallyUntil(Eventually(a,Until(Not(a),b)),Simplify(hub)) //fromEveryAfter(f,Simplify(hub))
       case f@Eventually(Action(a), Until(f2,Action(b))) => fromEventuallyUntil(f,Simplify(hub))
@@ -332,7 +330,7 @@ object Uppaal {
         var firstUpds = names.map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // add a dummy broadcast chan based on the priority of the edge
         // first part of the edge
-        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g,tacts & facts & executions1)//u)
+        newedges += UppaalEdge(from,maxloc+1,names.map(a=>chan(a))+priority(prio),cc,cr,g,tacts & facts & executions1 & renameDataVars(u,hub))//u)
 //        newedges += UppaalEdge(from,to,acts.map(a=>"ch"+portToString(a)),cc,cr++acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),g,tacts & facts & executions)//u)
 //        // second part of the edge
         newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,names.map(a => clock(a)),Ltrue,firstUpds & executions & executions2)
@@ -349,6 +347,21 @@ object Uppaal {
       val actclocks = hub.ports.map(p => clock(hub.getPortName(p)))
 
       Uppaal(hub.sts++committed,hub.init,hub.clocks++actclocks,newedges,hub.inv,committed,act2locs,hub.initVal++initVal,"Hub")
+  }
+
+  private def renameDataVars(u:Update,hub: HubAutomata):Update = u match {
+    case Asg(x,e) if x.name.matches("[0-9]*") => Asg(Var(data(hub.getPortName(x.name.toInt))),renameDataVars(e,hub))
+    case Asg(x,e) => Asg(x,renameDataVars(e,hub))
+    case Par(u1,u2) => Par(renameDataVars(u1,hub),renameDataVars(u2,hub))
+    case Seq(u1,u2) => Seq(renameDataVars(u1,hub),renameDataVars(u2,hub))
+    case _ => u
+  }
+
+  private def renameDataVars(e:Expr,hub:HubAutomata):Expr = e match {
+    case Var(x,v) if x.matches("[0-9]*") => Var(data(hub.getPortName(x.toInt)),v)
+    case Fun(n,args) => Fun(n,args.map(e => renameDataVars(e,hub)))
+    case Cons("*",_) => Val(0)
+    case _ => e
   }
 
   private def increaseSince(a:String,b:String):Update =
@@ -370,6 +383,8 @@ object Uppaal {
   private def clock(a:String):String = "t"+a
 
   private def priority(i:Int):String = "priority"+Math.abs(i)+"!"
+
+  private def data(a:String):String = "data_"+a
 
   //  private def mkSinceName(a:Int,b:Int):String =
   //    "int"+portToString(a)+"_"+portToString(b)
@@ -398,7 +413,7 @@ object Uppaal {
         // set to true all variables that capture first_a for a an action in acts
         var firstUpds = names.intersect(facts).map(a => Asg(Var(done(a)),Val(1))).foldRight[Update](Noop)(_&_)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => clock(a)),g,firstUpds & trueActs & falseActs)//u)
+        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => clock(a)),g,firstUpds & trueActs & falseActs & renameDataVars(u,hub))//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,Noop)
         // committed states accumulated
@@ -449,7 +464,7 @@ object Uppaal {
         var resetfirsts = if (names.contains(a)) Asg(Var(done(b)),Val(0)) else Noop
 //        println("resetFirst: "+ resetfirsts)
         // first part of the edge, to a new committed state
-        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => chan(a)),g, resetfirsts & trueActs & firstUpds & falseActs)//u)
+        newedges += UppaalEdge(from,to,names.map(a=>chan(a)),cc,cr++names.map(a => chan(a)),g, resetfirsts & trueActs & firstUpds & falseActs & renameDataVars(u,hub))//u)
         // second part of the edge, from the new committed state
 //        newedges += UppaalEdge(maxloc+1,to,Set(),CTrue,acts.map(a => s"t${if (a>=0) a.toString else "_"+Math.abs(a).toString}"),Ltrue,resetfirsts)
         // committed states accumulated
@@ -733,7 +748,7 @@ object Uppaal {
 
     if (act2port.map(_._1).toSet.intersect(formula.actions) == formula.actions )
       tf2UF(formula).map(Simplify(_))
-    else throw new FormulaException("Unkown action names in formula "+ Show(formula))
+    else throw new FormulaException("Unknown action names in formula "+ Show(formula))
   }
 
 
@@ -805,23 +820,30 @@ object Uppaal {
      """.stripMargin
   }
 
-  private def mkVariables(uppaal: Uppaal):String = {
-    var vs:Set[Var] = uppaal.edges.map(e => e.upd).flatMap(u=>u.vars)
-    // for now only auxiliary variables to verify things like a doesn't executes more than once before b
-    // ignore other variables for now
-    vs = vs.filter(v=>v.name.startsWith("v"))
-    val ints = vs.filter(v=>v.name.startsWith("since"))
-    //if (vs.nonEmpty) "int[0,2] "+vs.map(Show(_)).mkString("",",",";") else ""
-    if (vs.nonEmpty) "bool "+vs.map(Show(_)).mkString("",",",";\n") else ""
-    if (ints.nonEmpty) "int[0,2] "+ints.map(Show(_)).mkString("",",",";\n") else ""
-  }
+//  private def mkVariables(uppaal: Uppaal):String = {
+//    var vs:Set[Var] = uppaal.edges.map(e => e.upd).flatMap(u=>u.vars)
+//    // for now only auxiliary variables to verify things like a doesn't executes more than once before b
+//    // ignore other variables for now
+//    val bools = vs.filter(v=>v.name.startsWith("v"))
+//    //val ints = vs.filter(v=>v.name.startsWith("since"))
+//    val sinces = vs.filter(v=>v.name.startsWith("since"))
+//    val ints   = vs.diff(bools--sinces)
+//    (if (bools.nonEmpty)   "bool "     + vs.map(Show(_)).mkString("",",",";\n")  else "") +
+//      (if (sinces.nonEmpty)  "int[0,2] " +ints.map(Show(_)).mkString("",",",";\n") else "") +
+//      (if (ints.nonEmpty)    "int "      +ints.map(Show(_)).mkString("",",",";\n") else "")
+//  }
 
   private def mkVariables(vars: Set[Var]):String = {
-    // all booleans for know
-    val bools = vars.filterNot(v=>v.name.startsWith("since"))
-    val ints = vars.filter(v=>v.name.startsWith("since"))
+    val bools = vars.filter(v=>v.name.startsWith("v") || v.name.startsWith("P") || v.name.startsWith("done"))
+    val sinces = vars.filter(v=>v.name.startsWith("since"))
+    val ints   = vars.diff(bools++sinces)
     (if (bools.nonEmpty) "bool "+bools.map(Show(_)).mkString("",",",";\n") else "") +
-      (if (ints.nonEmpty) "int[0,2] "+ints.map(Show(_)).mkString("",",",";\n") else "")
+      (if (sinces.nonEmpty) "int[0,2] "+sinces.map(Show(_)).mkString("",",",";\n") else "") +
+      (if (ints.nonEmpty) "int "+ints.map(Show(_)).mkString("",",",";\n") else "")
+  }
+
+  private def mkConstants(cons: Set[Cons]):String = {
+    if (cons.isEmpty) "" else "int " + cons.map(Show(_)).mkString("",",",";\n")
   }
 
   private def mkLocation(loc:Int,inv:CCons,committed:Boolean):String = {
@@ -871,6 +893,7 @@ object Uppaal {
   }
 
   private def mkUpd(u:Update):String = Show(u)
+
 
   private def mkGuard(from:Int,cc:CCons,g:Guard): String =
     s"""<label kind="guard" x="${from*100+25}" y="-34">${mkCCG(cc,g)}</label>"""

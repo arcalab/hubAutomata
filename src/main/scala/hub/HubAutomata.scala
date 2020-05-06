@@ -736,7 +736,7 @@ object HubAutomata {
           , seed + 2)
       // TASK
       case Prim(CPrim("task",i, j, extra),ins,outs,parents) =>
-        val tports:Option[List[TaskPort]] = extra.toList.find(p=> p.isInstanceOf[List[TaskPort]]).map(e=>e.asInstanceOf[List[TaskPort]])
+        val tports:Option[List[TaskPort]] = extra.find({case (l:TaskPort)::ls => true ; case _ => false}).map(e=>e.asInstanceOf[List[TaskPort]])
         if (tports.isDefined) {
           var nins = ins.toIterator
           var nouts = outs.toIterator
@@ -1012,7 +1012,7 @@ object HubAutomata {
         // transition that synchronizes
         edges+= lastLoc -> (to,0, Set(port), Ltrue, CTrue, resets, upd, Set(e))
         // invariant of this NW/TO
-        inv+= lastLoc -> (if (periodic.isDefined) CAnd(LE(clock(c),CInt(timeout)),LE("p",CInt(periodic.get))) else LE(clock(c),CInt(timeout)))
+        inv+= lastLoc -> (if (periodic.isDefined) CAnd(LE(clock(c),CInt(timeout)),LE("t_e",CInt(periodic.get))) else LE(clock(c),CInt(timeout)))
         // new last location
         lastLoc = to
         // upd current locs
@@ -1040,7 +1040,7 @@ object HubAutomata {
         // edge that synchronizes
         edges+= lastLoc -> (to, 0,Set(port), Ltrue, CTrue, resets, upd, Set(e))
         //upd invariant if needed
-        if (periodic.isDefined) inv+= lastLoc -> LE("p",CInt(periodic.get))
+        if (periodic.isDefined) inv+= lastLoc -> LE("t_e",CInt(periodic.get))
         // upd last loc
         lastLoc = to
         // upd locs
@@ -1060,13 +1060,13 @@ object HubAutomata {
         }
       }
       if (periodic.isDefined) {
-        var reset:Set[String] = Set("p")
+        var reset:Set[String] = Set("t_e")
         if (!tports(0)._2.isWait) reset+= clock(0)
-        inv+= lastLoc -> LE("p",CInt(periodic.get))
-        edges+= lastLoc -> (init,0, Set(), Ltrue, ET("p",CInt(periodic.get)), reset,Noop, Set(e))
+        inv+= lastLoc -> LE("t_e",CInt(periodic.get))
+        edges+= lastLoc -> (init,0, Set(), Ltrue, ET("t_e",CInt(periodic.get)), reset,Noop, Set(e))
       }
       val ports = tports.map(_._1).toSet
-      val clocks:Set[String] = (0 to c-1).map(i => clock(i)).toSet ++ (if (periodic.isDefined) Set("p")else Set())
+      val clocks:Set[String] = (0 to c-1).map(i => clock(i)).toSet ++ (if (periodic.isDefined) Set("t_e")else Set())
       (HubAutomata(ports,locs,init,edges,clocks,inv,Map(),(inPorts,outPorts)),lastLoc)
     }
 
