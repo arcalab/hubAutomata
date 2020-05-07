@@ -20,8 +20,8 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'Hubs for VirtuosoNext™'
-copyright = '2020, arca.di.uminho.pt'
-author = 'arca.di.uminho.pt'
+copyright = '2020, Guillermina Cledou, José Proença '
+author = 'Guillermina Cledou, José Proença'
 
 
 # -- General configuration ---------------------------------------------------
@@ -60,5 +60,7 @@ html_static_path = ['_static']
 html_css_files = [
     'css/custom.css'
 ]
+
+
 
 

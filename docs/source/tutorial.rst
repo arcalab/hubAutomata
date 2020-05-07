@@ -256,7 +256,7 @@ Composed hubs with shared port names will synchronize over such ports.
 
     // Main block (Preo Syntax)
     // uses the hub myDupl specified in the code block
-    myHub
+    myDupl
 
     {
         // a hub using Treo syntax
@@ -286,7 +286,7 @@ Various hubs specified inside the block are separated by ``,``.
 
     // Main block (Preo Syntax)
     // uses the hub myDupl specified in the code block
-    timer(5) ; myHub
+    timer(5) ; myDupl
 
     {
         // a hub using Treo syntax
@@ -526,8 +526,7 @@ while ``[]`` and ``<>`` are the universal and existential quantifiers over state
 ``a.t`` is a special clock assigned to port `a` that is set to `0` every time `a` fires -- i.e.,
 after `a` fired, this clock tracks the time since `a` last fired.
 
-The following table describes intuitively when each formuly is satisfied.
-For a formal definition of satisfaction checkout `the technical report  <#>`_.
+The following table describes intuitively when each formula is satisfied.
 
 ========================= =======================================================================
 Construct                      Description
@@ -610,6 +609,27 @@ In particular, for each property, the result box shows:
     initialized as false and set to true whenever port `a` fires (never set to false again).
     Thus, each property has its own Uppaal model.
 
+
+Manual verification using Uppaal
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Although the user can automatically verify properties from the temporal logic widget, as explained above,
+it its possible to download the model |download| and import the model from the Uppaal model checker.
+
+After running Uppaal, go to **File** -> **Open System** and select the ``.xml`` model downloaded either from the
+:ref:`uppaal` or :ref:`temporal-widget` widget.
+
+- **Editor**: shows the automaton of the hub and the structure of the Uppaal Project.
+  Global declarations of variables, clocks, and channels, can be found under *Declarations*, while local declarations
+  can be found under *Hub* -> *Declarations*. The initialization of the system is found under *System declarations*.
+- **Simulator**: provides tools to simulate executions by selecting an enabled transition, while
+  highlighting the current location in the automaton, among other functionality.
+- **Verifier**: provides functionality to write temporal properties and verify them.
+  If the model imported was downloaded from the :ref:`temporal-widget` widget,
+  it will show the corresponding property for which the model was created.
+
+
+.. _uppaal:
 
 Uppaal Model
 ------------

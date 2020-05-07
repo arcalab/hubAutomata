@@ -22,4 +22,4 @@ Hubs for VirtuosoNext™ toolset is available to use
 or to download and install locally following the
 [installation guidelines](https://hubs.readthedocs.io/en/latest/install.html).
 
-Either way, [read the docs](https://hubs.readthedocs.io/en/latest/try-it.html) to learn more about how to use the tools.
+Either way, [read the docs](https://hubs.readthedocs.io/en/latest/tutorial.html) to learn more about how to use the tools.

@@ -19,11 +19,21 @@ The toolset is developed as a sub-module of `ReoLive <https://github.com/ReoLang
 
 .. toctree::
    :maxdepth: 2
+   :caption: Getting started
    :hidden:
 
-   try-it
    install
+   tutorial
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Resources
+   :hidden:
+
    publications
+   support
+
+
 
 VirtuosoNext™ RTOS
 ==================
@@ -44,4 +54,4 @@ Hubs for VirtuosoNext™ toolset is available to use
 or to download and install locally following the
 :doc:`installation guidelines <install>`.
 
-Either case, read :doc:`try-it` to learn more about how to use the tools.
+Either case, read :doc:`tutorial` to learn more about how to use the tools.
