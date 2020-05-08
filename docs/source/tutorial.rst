@@ -357,6 +357,11 @@ Transitions are labeled as followed:
     - **clock updates**, if any, represented by a purple label, e.g. :math:`cl:=0` (top transition)
 
 
+.. warning::
+
+    There is a known issue where labels of the automaton 
+    are not visualised in the current version of Firefox.
+
 .. _examples-widget:
 
 Examples
