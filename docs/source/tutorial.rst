@@ -67,7 +67,7 @@ This is explained below in further detail.
 Primitive Hubs
 ^^^^^^^^^^^^^^
 
-Keyword for predefined hubs are listed in the following table.
+Usage of predefined hubs is illustrated in the following tables.
 They are separated into original hubs in VirtusoNext™ and newly proposed hubs.
 
 .. |port| image:: _static/imgs/hubs/port.svg
@@ -92,34 +92,33 @@ They are separated into original hubs in VirtusoNext™ and newly proposed hubs.
 Original Hubs from VirtuosoNext™
 
 =================== =================
-Hub                 Keyword
+Hub                 Usage
 =================== =================
-|port| Port         ``port``
-|event| Event        ``event``
-|dEvent| DataEvent  ``dataEvent``
-|sema| Semaphore    ``semaphore``
-|resrc| Resource    ``resource``
-|fifo| FIFO         ``fifo``
-|bb| BlackBoard     ``blackboard``
+|port| Port         ``port(in,out)``
+|event| Event        ``event(in,out)``
+|dEvent| DataEvent  ``dataEvent(in,out)``
+|sema| Semaphore    ``semaphore(in,out)``
+|resrc| Resource    ``resource(in1,in2)``
+|fifo| FIFO         ``fifo(in,out)``
+|bb| BlackBoard     ``blackboard(in,out)``
 =================== =================
 
 Newly proposed hubs
 
 ======================== ============================================
-Hub                      Keyword
+Hub                      Usage
 ======================== ============================================
-|drain| Drain            ``drain``
-|merger| Merger          ``merger``
-|xor| Exclusive Router   ``xor``
-|dupl| Duplicator        ``dupl``
-|eventF| EventFull       ``eventFull``
-|dEventF| DataEventFull  ``dataEventFull``
-|fifoF| FIFOFull         ``fifoFull``
-|bbF| BlackBoardFull     ``blackboardFull``
-|timer| Timer            ``timer`` or ``timer(n)``
+|drain| Drain            ``drain(in1,in2)``
+|merger| Merger          ``merger(in1,in2,out)``
+|xor| Exclusive Router   ``xor(in,out1,out2)``
+|dupl| Duplicator        ``dupl(in,out1,out2)``
+|eventF| EventFull       ``eventFull(in,out)``
+|dEventF| DataEventFull  ``dataEventFull(in,out)``
+|fifoF| FIFOFull         ``fifoFull(in,out)``
+|bbF| BlackBoardFull     ``blackboardFull(in,out)``
+|timer| Timer            ``timer(in,out)`` or ``timer<n>(in,out)``
                          (*n* a positive integer, *0* when omitted)
 ======================== ============================================
-
 
 Tasks
 ^^^^^
@@ -145,16 +144,6 @@ These can be:
  * waiting (W) – a task waits indefinitely until the request can be served
  * non-waiting (NW) – either the requests is served without delay or the request fails
  * waiting with time-out (WT) – waits either until the request is served or the specified time-out has expired.
-
-.. note::
-
-    When using the ``every`` construct,
-    the ``n`` must be higher or equal to the total amount of time
-    the task can wait to succeed on requests to its ports. For example,
-    ``task<T1>(4 a!, 5 b!) every 10`` is valid: 4+5 <= 10, while
-    ``task<T1>(NW a!, 5 b!) every 3`` is invalid: 5 > 3.
-    As a consequence, these task cannot have a waiting interaction (``W``).
-
 
 Examples
 """"""""
@@ -205,6 +194,8 @@ Composition
 Preo syntax
 """""""""""
 Composition using the **Preo** syntax is defined in a pointfree style, i.e., without naming the ports.
+For example, the ``dupl(in,out1,out2)`` hub, is specified simply as ``dupl``,
+and the ``timer<n>(in,out)`` is specified as ``timer(n)`` or just ``timer`` for default values.
 
 Composition of hubs and tasks can be sequential ``;`` (outputs to inputs)
 or parallel ``*`` (appending inputs and outputs).
@@ -276,7 +267,7 @@ More complex examples are available in the :ref:`examples-widget` widget `online
 Specifying Hubs
 ^^^^^^^^^^^^^^^
 
-THe main Hub is specified following the :ref:`preo`.
+The main Hub is specified following the :ref:`preo`.
 
 It is possible to declare various hubs, using the :ref:`preo` or :ref:`treo`,
 by declaring them in a function like manner inside a block `{ }` and referencing their names.
