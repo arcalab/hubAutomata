@@ -186,7 +186,8 @@ object Uppaal {
       // accumulate new committed state
       committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
-      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+      act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq)
+        .groupBy(_._1).mapValues(_.map(_._2).toSet.flatten).toMap
       // new max location number
       maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
@@ -337,7 +338,8 @@ object Uppaal {
 //        // accumulate committed states
         committed += (maxloc+1)
 //        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
-        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq).groupBy(_._1).mapValues(_.map(_._2).toSet.flatten)
+        act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq)
+          .groupBy(_._1).mapValues(_.map(_._2).toSet.flatten).toMap
 //        // new max location
         maxloc +=1
 //        // initialize port variables to true if this edge goes out of the initial location
