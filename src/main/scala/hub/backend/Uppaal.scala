@@ -187,7 +187,7 @@ object Uppaal {
       committed += (maxloc+1)
       // add a new map from acts to the new committed state (state where those acts are true)
       act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq)
-        .groupBy(_._1).mapValues(_.map(_._2).toSet.flatten).toMap
+        .groupBy(_._1).view.mapValues(_.map(_._2).toSet.flatten).toMap
       // new max location number
       maxloc +=1
       // initialize port variables to true if this edge goes out of the initial location
@@ -339,7 +339,7 @@ object Uppaal {
         committed += (maxloc+1)
 //        // keep track of actions to locations where those actions just executed (i.e. new committed state created)
         act2locs = (act2locs.toSeq ++ acts.map(a => a -> Set(maxloc+1)).toMap.toSeq)
-          .groupBy(_._1).mapValues(_.map(_._2).toSet.flatten).toMap
+          .groupBy(_._1).view.mapValues(_.map(_._2).toSet.flatten).toMap
 //        // new max location
         maxloc +=1
 //        // initialize port variables to true if this edge goes out of the initial location
@@ -739,6 +739,8 @@ object Uppaal {
           res = UImply(mkFirstOf(a),UImply(res,mode2UStF(a,mode,t)))
         } else throw new FormulaException("Action name not found: " + a)
         res
+      case Until(_,_) =>
+        throw new FormulaException("`Until` not supported in `stf2UStF`")
     }
 
     def mode2UStF(a: Action, mode: RefireMode, t: Int):UppaalStFormula = mode match {
